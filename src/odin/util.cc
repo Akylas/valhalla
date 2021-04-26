@@ -11,7 +11,8 @@
 #include <date/tz.h>
 
 #include "baldr/turnlanes.h"
-#include "locales.h"
+// CARTOHACK
+#include "valhalla/odin/locales.h"
 #include "midgard/logging.h"
 #include "odin/util.h"
 #include "tyr/serializer_constants.h"
