@@ -154,7 +154,7 @@ public:
 
   StateId NewStateId() const {
     // CARTOHACK
-    return columns_.empty() ? StateId() : StateId(columns_.size() - 1, (uint32_t)columns_.back().size());
+    return columns_.empty() ? StateId() : StateId((uint32_t)columns_.size() - 1, (uint32_t)columns_.back().size());
   }
 
   StateId::Time AppendMeasurement(const Measurement& measurement) {
