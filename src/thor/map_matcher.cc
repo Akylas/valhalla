@@ -80,8 +80,12 @@ interpolate_matches(const std::vector<valhalla::meili::MatchResult>& matches,
     interpolated.reserve(matches.size());
     size_t last_idx = idx;
     for (auto segment = begin_edge; segment != end_edge; ++segment) {
-      float edge_length = matcher->graphreader()
-                              .GetGraphTile(segment->edgeid)
+      // CARTOHACK
+      auto tile = matcher->graphreader().GetGraphTile(segment->edgeid);
+      if (!tile) {
+        continue;
+      }
+      float edge_length = tile
                               ->directededge(segment->edgeid)
                               ->length();
       float total_length = segment == begin_edge ? -edges.front().source * edge_length
@@ -212,6 +216,10 @@ MapMatcher::FormPath(meili::MapMatcher* matcher,
     // Get the directed edge
     GraphId edge_id = edge_segment.edgeid;
     matcher->graphreader().GetGraphTile(edge_id, tile);
+    // CARTOHACK
+    if (!tile) {
+      throw std::runtime_error("Missing tile");
+    }
     directededge = tile->directededge(edge_id);
 
     // Check if connected to prior edge
@@ -300,6 +308,10 @@ MapMatcher::FormPath(meili::MapMatcher* matcher,
     prev_segment = &edge_segment;
     prior_node = directededge->endnode();
     graph_tile_ptr end_tile = matcher->graphreader().GetGraphTile(prior_node);
+    // CARTOHACK
+    if (!end_tile) {
+      throw std::runtime_error("Missing tile");
+    }
     nodeinfo = end_tile->node(prior_node);
   }
 

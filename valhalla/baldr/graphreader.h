@@ -21,6 +21,11 @@
 
 #include <valhalla/proto/incidents.pb.h>
 
+// CARTOHACK
+namespace sqlite3pp {
+class database;
+}
+
 namespace valhalla {
 namespace baldr {
 
@@ -147,8 +152,9 @@ public:
 
 protected:
   inline uint32_t get_offset(const GraphId& graphid) const {
+    // CARTOHACK
     return graphid.level() < 4 ? index_offsets_[graphid.level()] + graphid.tileid()
-                               : cache_indices_.size();
+                               : static_cast<uint32_t>(cache_indices_.size());
   }
   inline uint32_t get_index(const GraphId& graphid) const {
     auto offset = get_offset(graphid);
@@ -429,6 +435,12 @@ public:
  */
 class GraphReader {
 public:
+  // CARTOHACK
+  /**
+   * Constructor using tiles inside databases.
+   * @param dbs  List of database instances to use.
+   */
+  GraphReader(const std::vector<std::shared_ptr<sqlite3pp::database>>& dbs);
   /**
    * Constructor using tiles as separate files.
    * @param pt  Property tree listing the configuration for the tile storage
@@ -914,6 +926,11 @@ protected:
   std::shared_ptr<const tile_extract_t> tile_extract_;
   static std::shared_ptr<const GraphReader::tile_extract_t>
   get_extract_instance(const boost::property_tree::ptree& pt);
+
+  // CARTOHACK
+  // MBTiles database
+  struct mbtiles_db_t;
+  std::shared_ptr<const mbtiles_db_t> mbtiles_db_;
 
   // Information about where the tiles are kept
   const std::string tile_dir_;

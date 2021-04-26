@@ -33,6 +33,8 @@ constexpr size_t TILE_COUNT = 180 * 360;
 // macro is faster than inline function for this..
 #define out_of_range(v) v > NO_DATA_HIGH || v < NO_DATA_LOW
 
+// CARTOHACK
+/*
 std::list<std::string> get_files(const std::string& root_dir) {
   std::list<std::string> files;
   if (filesystem::exists(root_dir) && filesystem::is_directory(root_dir)) {
@@ -48,6 +50,7 @@ std::list<std::string> get_files(const std::string& root_dir) {
   }
   return files;
 }
+*/
 
 template <typename fmt_t> uint16_t is_hgt(const std::string& name, fmt_t& fmt) {
   std::smatch m;
@@ -68,12 +71,15 @@ int16_t flip(int16_t value) {
   return ((value & 0xFF) << 8) | ((value >> 8) & 0xFF);
 }
 
+// CARTOHACK
+/*
 uint64_t file_size(const std::string& file_name) {
   // TODO: detect gzip and actually validate the uncompressed size?
   struct stat s;
   int rc = stat(file_name.c_str(), &s);
   return rc == 0 ? s.st_size : -1;
 }
+*/
 
 } // namespace
 
@@ -82,6 +88,8 @@ namespace skadi {
 
 ::valhalla::skadi::sample::sample(const std::string& data_source)
     : unzipped_cache(-1, std::vector<int16_t>()), data_source(data_source) {
+// CARTOHACK
+/*
   // messy but needed
   while (this->data_source.size() &&
          this->data_source.back() == filesystem::path::preferred_separator) {
@@ -111,6 +119,7 @@ namespace skadi {
       mapped_cache[index].second.map(f, size, POSIX_MADV_SEQUENTIAL);
     }
   }
+*/
 }
 
 const int16_t* sample::source(uint16_t index) const {
@@ -118,6 +127,8 @@ const int16_t* sample::source(uint16_t index) const {
   if (index >= TILE_COUNT) {
     return nullptr;
   }
+  return nullptr;
+/*
 
   // if we dont have anything maybe its lazy loaded
   auto& mapped = mapped_cache[index];
@@ -166,9 +177,13 @@ const int16_t* sample::source(uint16_t index) const {
   // TODO: LRU
   unzipped_cache.first = index;
   return unzipped_cache.second.data();
+*/
 }
 
 template <class coord_t> double sample::get(const coord_t& coord) const {
+// CARTOHACK
+  return NO_DATA_VALUE;
+/*
   // check the cache and load
   auto lon = std::floor(coord.first);
   auto lat = std::floor(coord.second);
@@ -239,6 +254,7 @@ template <class coord_t> double sample::get(const coord_t& coord) const {
   }
   // if we were missing some we need to adjust by that
   return value / adjust;
+*/
 }
 
 template <class coords_t> std::vector<double> sample::get_all(const coords_t& coords) const {

@@ -177,7 +177,8 @@ public:
       // If edgelabel is not null, append it to the label set otherwise append
       // a dummy. In both cases add the label to the priority queue, set its
       // predecessor to kInvalidLabel, and initialize costs to 0.
-      const uint32_t idx = labels_.size();
+      // CARTOHACK
+      const uint32_t idx = (uint32_t)labels_.size();
       dest_status_.emplace(dest, idx);
       labels_.emplace_back(edgelabel ? *edgelabel : Label());
       labels_.back().InitAsOrigin(mode, dest, {});
@@ -194,7 +195,8 @@ public:
       // If edgelabel is not null, append it to the label set otherwise append
       // a dummy. In both cases add the label to the priority queue and set its
       // predecessor to kInvalidLabel
-      const uint32_t idx = labels_.size();
+      // CARTOHACK
+      const uint32_t idx = (uint32_t)labels_.size();
       node_status_.emplace(nodeid, idx);
       labels_.emplace_back(edgelabel ? *edgelabel : Label());
       labels_.back().InitAsOrigin(mode, kInvalidDestination, nodeid);
@@ -305,8 +307,15 @@ find_shortest_path(baldr::GraphReader& reader,
                    const float max_time);
 
 // Route path iterator. Methods to assist recovering route paths from Labels.
-class RoutePathIterator : public std::iterator<std::forward_iterator_tag, const Label> {
+// CARTOHACK
+class RoutePathIterator {
 public:
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = const Label;
+  using difference_type = std::ptrdiff_t;
+  using pointer = const Label*;
+  using reference = const Label&;
+
   // Construct a route path iterator.
   RoutePathIterator(const LabelSet* labelset, const uint32_t label_idx)
       : labelset_(labelset), label_idx_(label_idx) {

@@ -216,7 +216,10 @@ std::vector<TimeDistance> TimeDistanceBSSMatrix::OneToMany(
 
     auto endnode = pred.endnode();
     graph_tile_ptr tile = graphreader.GetGraphTile(endnode);
-    ;
+    // CARTOHACK
+    if (!tile) {
+      throw std::runtime_error("Missing tile");
+    }
     auto ll = tile->get_node_ll(endnode);
 
     // Identify any destinations on this edge
@@ -225,6 +228,10 @@ std::vector<TimeDistance> TimeDistanceBSSMatrix::OneToMany(
       // Update any destinations along this edge. Return if all destinations
       // have been settled.
       tile = graphreader.GetGraphTile(pred.edgeid());
+      // CARTOHACK
+      if (!tile) {
+        throw std::runtime_error("Missing tile");
+      }
       const DirectedEdge* edge = tile->directededge(pred.edgeid());
       if (UpdateDestinations(origin, locations, destedge->second, edge, tile, pred)) {
         return FormTimeDistanceMatrix();
@@ -413,6 +420,10 @@ std::vector<TimeDistance> TimeDistanceBSSMatrix::ManyToOne(
       // Update any destinations along this edge. Return if all destinations
       // have been settled.
       tile = graphreader.GetGraphTile(pred.edgeid());
+      // CARTOHACK
+      if (!tile) {
+        throw std::runtime_error("Missing tile");
+      }
       const DirectedEdge* edge = tile->directededge(pred.edgeid());
       if (UpdateDestinations(dest, locations, destedge->second, edge, tile, pred)) {
         return FormTimeDistanceMatrix();
@@ -493,6 +504,10 @@ void TimeDistanceBSSMatrix::SetOriginOneToMany(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -538,6 +553,10 @@ void TimeDistanceBSSMatrix::SetOriginManyToOne(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the opposing directed edge, continue if we cannot get it
@@ -621,6 +640,10 @@ void TimeDistanceBSSMatrix::SetDestinationsOneToMany(
       // Form a threshold cost (the total cost to traverse the edge)
       GraphId id(static_cast<GraphId>(edge.graph_id()));
       graph_tile_ptr tile = graphreader.GetGraphTile(id);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(id);
       float c = pedestrian_costing_->EdgeCost(directededge, tile).cost;
 
@@ -669,6 +692,10 @@ void TimeDistanceBSSMatrix::SetDestinationsManyToOne(
       // Form a threshold cost (the total cost to traverse the edge)
       GraphId id(static_cast<GraphId>(edge.graph_id()));
       graph_tile_ptr tile = graphreader.GetGraphTile(id);
+      // CARTOHACK
+      if (!tile) {
+        throw std::runtime_error("Missing tile");
+      }
       const DirectedEdge* directededge = tile->directededge(id);
       float c = pedestrian_costing_->EdgeCost(directededge, tile).cost;
 

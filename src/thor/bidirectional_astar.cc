@@ -636,8 +636,13 @@ BidirectionalAStar::GetBestPath(valhalla::Location& origin,
 
       // Get the opposing predecessor directed edge. Need to make sure we get
       // the correct one if a transition occurred
+      // CARTOHACK
+      auto opp_tile = graphreader.GetGraphTile(rev_pred.opp_edgeid());
+      if (!opp_tile) {
+        return {};
+      }
       const DirectedEdge* opp_pred_edge =
-          graphreader.GetGraphTile(rev_pred.opp_edgeid())->directededge(rev_pred.opp_edgeid());
+          opp_tile->directededge(rev_pred.opp_edgeid());
 
       // Expand from the end node in reverse direction.
       Expand<ExpansionType::reverse>(graphreader, rev_pred.endnode(), rev_pred, reverse_pred_idx,
@@ -808,6 +813,10 @@ void BidirectionalAStar::SetOrigin(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -895,6 +904,10 @@ void BidirectionalAStar::SetDestination(GraphReader& graphreader,
     }
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the opposing directed edge, continue if we cannot get it

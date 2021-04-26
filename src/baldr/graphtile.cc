@@ -99,6 +99,8 @@ graph_tile_ptr GraphTile::DecompressTile(const GraphId& graphid,
   return new GraphTile(graphid, std::make_unique<const VectorGraphMemory>(std::move(data)));
 }
 
+// CARTOHACK
+#if HAVE_FILESYSTEM
 // Constructor given a filename. Reads the graph data into memory.
 graph_tile_ptr GraphTile::Create(const std::string& tile_dir,
                                  const GraphId& graphid,
@@ -140,6 +142,7 @@ graph_tile_ptr GraphTile::Create(const std::string& tile_dir,
   // Nothing to load anywhere
   return nullptr;
 }
+#endif
 
 graph_tile_ptr GraphTile::Create(const GraphId& graphid, std::vector<char>&& memory) {
   return new GraphTile(graphid, std::make_unique<const VectorGraphMemory>(std::move(memory)));
@@ -162,6 +165,8 @@ GraphTile::GraphTile(const GraphId& graphid,
   Initialize(graphid);
 }
 
+// CARTO
+#if HAVE_FILESYSTEM
 GraphTile::GraphTile(const std::string& tile_dir,
                      const GraphId& graphid,
                      std::unique_ptr<const GraphMemory>&& traffic_memory) {
@@ -171,9 +176,10 @@ GraphTile::GraphTile(const std::string& tile_dir,
     *this = std::move(const_cast<GraphTile&>(*tile));
   }
 }
+#endif
 
-GraphTile::GraphTile() = default;
-
+// CARTOHACK
+#if HAVE_FILESYSTEM
 void GraphTile::SaveTileToFile(const std::vector<char>& tile_data, const std::string& disk_location) {
   // At first we save tile to a temporary file and then move it
   // so we can avoid cases when another thread could read partially written file.
@@ -201,7 +207,10 @@ void GraphTile::SaveTileToFile(const std::vector<char>& tile_data, const std::st
   if (!success)
     filesystem::remove(tmp_location);
 }
+#endif
 
+// CARTOHACK
+#if HAVE_FILESYSTEM
 graph_tile_ptr GraphTile::CacheTileURL(const std::string& tile_url,
                                        const GraphId& graphid,
                                        tile_getter_t* tile_getter,
@@ -232,6 +241,7 @@ graph_tile_ptr GraphTile::CacheTileURL(const std::string& tile_url,
 
   return new GraphTile(graphid, std::make_unique<const VectorGraphMemory>(std::move(result.bytes_)));
 }
+#endif
 
 GraphTile::~GraphTile() = default;
 

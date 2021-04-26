@@ -68,7 +68,11 @@ template <typename TileSet> edge_tracker edge_tracker::create(TileSet& tiles, Gr
     // TODO: just read the header, parsing the whole thing isnt worth it at this point
     edges_in_tiles.emplace(tile_id, edge_count);
     auto tile = reader.GetGraphTile(tile_id);
-    assert(tile);
+    // CARTOHACK
+    //assert(tile);
+    if (!tile) {
+      continue;
+    }
     edge_count += tile->header()->directededgecount();
     // clear the cache if it is overcommitted to avoid running out of memory.
     if (reader.OverCommitted()) {

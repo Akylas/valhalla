@@ -56,6 +56,8 @@ class GraphTile : public boost::intrusive_ref_counter<GraphTile, GraphTileRefCou
 public:
   static const constexpr char* kTilePathPattern = "{tilePath}";
 
+// CARTOHACK
+#if HAVE_FILESYSTEM
   /**
    * Constructs with a given GraphId. Reads the graph tile from file
    * into memory.
@@ -66,6 +68,7 @@ public:
   static graph_tile_ptr Create(const std::string& tile_dir,
                                const GraphId& graphid,
                                std::unique_ptr<const GraphMemory>&& traffic_memory = nullptr);
+#endif
 
   /**
    * Constructs with a given the graph Id, pointer to the tile data, and the
@@ -99,12 +102,15 @@ public:
                                      tile_getter_t* tile_getter,
                                      const std::string& cache_location);
 
+// CARTOHACK
+#if HAVE_FILESYSTEM
   /**
    * Construct a tile given a url for the tile using curl
    * @param  tile_data graph tile raw bytes
    * @param  disk_location tile filesystem path
    */
   static void SaveTileToFile(const std::vector<char>& tile_data, const std::string& disk_location);
+#endif
 
   /**
    * Destructor
@@ -805,6 +811,8 @@ protected:
             std::unique_ptr<const GraphMemory> memory,
             std::unique_ptr<const GraphMemory> traffic_memory = nullptr);
 
+// CARTOHACK
+#if HAVE_FILESYSTEM
   /**
    * Constructor given the graph Id, pointer to the tile data, and the
    * size of the tile data. This is used for memory mapped (mmap) tiles.
@@ -815,6 +823,7 @@ protected:
   GraphTile(const std::string& tile_dir,
             const GraphId& graphid,
             std::unique_ptr<const GraphMemory>&& traffic_memory = nullptr);
+#endif
 
   /**
    * Initialize pointers to internal tile data structures.

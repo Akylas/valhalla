@@ -195,6 +195,10 @@ TimeDistanceMatrix::OneToMany(const valhalla::Location& origin,
       // Update any destinations along this edge. Return if all destinations
       // have been settled.
       tile = graphreader.GetGraphTile(pred.edgeid());
+      // CARTOHACK
+      if (!tile) {
+        return {};
+      }
       const DirectedEdge* edge = tile->directededge(pred.edgeid());
       if (UpdateDestinations(origin, locations, destedge->second, edge, tile, pred)) {
         return FormTimeDistanceMatrix();
@@ -363,6 +367,10 @@ TimeDistanceMatrix::ManyToOne(const valhalla::Location& dest,
       // Update any destinations along this edge. Return if all destinations
       // have been settled.
       tile = graphreader.GetGraphTile(pred.edgeid());
+      // CARTOHACK
+      if (!tile) {
+        return {};
+      }
       const DirectedEdge* edge = tile->directededge(pred.edgeid());
       if (UpdateDestinations(dest, locations, destedge->second, edge, tile, pred)) {
         return FormTimeDistanceMatrix();
@@ -443,6 +451,10 @@ void TimeDistanceMatrix::SetOriginOneToMany(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -489,6 +501,10 @@ void TimeDistanceMatrix::SetOriginManyToOne(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the opposing directed edge, continue if we cannot get it
@@ -560,6 +576,10 @@ void TimeDistanceMatrix::SetDestinations(
       // Form a threshold cost (the total cost to traverse the edge)
       GraphId id(static_cast<GraphId>(edge.graph_id()));
       graph_tile_ptr tile = graphreader.GetGraphTile(id);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(id);
       float c = costing_->EdgeCost(directededge, tile).cost;
 
@@ -606,6 +626,10 @@ void TimeDistanceMatrix::SetDestinationsManyToOne(
       // Form a threshold cost (the total cost to traverse the edge)
       GraphId id(static_cast<GraphId>(edge.graph_id()));
       graph_tile_ptr tile = graphreader.GetGraphTile(id);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(id);
       float c = costing_->EdgeCost(directededge, tile).cost;
 

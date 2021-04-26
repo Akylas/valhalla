@@ -153,11 +153,13 @@ public:
   }
 
   StateId NewStateId() const {
-    return columns_.empty() ? StateId() : StateId(columns_.size() - 1, columns_.back().size());
+    // CARTOHACK
+    return columns_.empty() ? StateId() : StateId(columns_.size() - 1, (uint32_t)columns_.back().size());
   }
 
   StateId::Time AppendMeasurement(const Measurement& measurement) {
-    const auto time = measurements_.size();
+    // CARTOHACK
+    const auto time = (uint32_t)measurements_.size();
 
     measurements_.push_back(measurement);
     leave_times_.push_back(measurement.epoch_time());
@@ -176,8 +178,9 @@ public:
     if (columns_.empty()) {
       throw std::runtime_error("add measurement first");
     }
-    const auto expected_time = columns_.size() - 1;
-    const auto expected_id = columns_.back().size();
+    // CARTOHACK
+    const auto expected_time = (uint32_t)columns_.size() - 1;
+    const auto expected_id = (uint32_t)columns_.back().size();
     if (state.stateid() != StateId(expected_time, expected_id)) {
       throw std::runtime_error("state's stateid should be " + std::to_string(expected_time) + "/" +
                                std::to_string(expected_id) + " but got " +

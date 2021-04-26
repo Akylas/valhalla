@@ -3,7 +3,8 @@
 #include <string>
 #include <sys/stat.h>
 #include <utility>
-
+// CARTOHACK
+#include "baldr/graphreader_mbtiles.h"
 #include "baldr/connectivity_map.h"
 #include "baldr/curl_tilegetter.h"
 #include "baldr/graphreader.h"
@@ -16,8 +17,8 @@
 using namespace valhalla::midgard;
 
 namespace {
-
-constexpr size_t DEFAULT_MAX_CACHE_SIZE = 1073741824; // 1 gig
+// CARTOHACK
+constexpr size_t DEFAULT_MAX_CACHE_SIZE = 2097152;    // 2 megs
 constexpr size_t AVERAGE_TILE_SIZE = 2097152;         // 2 megs
 constexpr size_t AVERAGE_MM_TILE_SIZE = 1024;         // 1k
 
@@ -412,6 +413,15 @@ TileCache* TileCacheFactory::createTileCache(const boost::property_tree::ptree& 
   return new FlatTileCache(max_cache_size);
 }
 
+// CARTOHACK
+// Constructor using separate list of MBTiles databases
+GraphReader::GraphReader(const std::vector<std::shared_ptr<sqlite3pp::database>>& dbs)
+    : mbtiles_db_(std::make_shared<mbtiles_db_t>(dbs)),
+      tile_url_(""),
+      max_concurrent_users_(1),
+      cache_(TileCacheFactory::createTileCache(boost::property_tree::ptree{})) {
+}
+
 // Constructor using separate tile files
 GraphReader::GraphReader(const boost::property_tree::ptree& pt,
                          std::unique_ptr<tile_getter_t>&& tile_getter)
@@ -457,6 +467,13 @@ bool GraphReader::DoesTileExist(const GraphId& graphid) const {
   if (!graphid.Is_Valid() || graphid.level() > TileHierarchy::get_max_level()) {
     return false;
   }
+
+  // CARTOHACK
+  // use mbtiles db
+  if (mbtiles_db_) {
+    return mbtiles_db_->DoesTileExist(graphid);
+  }
+
   // if you are using an extract only check that
   if (!tile_extract_->tiles.empty()) {
     return tile_extract_->tiles.find(graphid) != tile_extract_->tiles.cend();
@@ -503,6 +520,18 @@ graph_tile_ptr GraphReader::GetGraphTile(const GraphId& graphid) {
     return cached;
   }
 
+  // CARTOHACK
+  // Use mbtiles db
+  if (mbtiles_db_) {
+    std::vector<char> tile_data;
+    if (mbtiles_db_->ReadTile(graphid, tile_data)) {
+      graph_tile_ptr tile = GraphTile::Create(graphid, std::move(tile_data));
+      size_t size = tile->header()->end_offset();
+      return cache_->Put(base, std::move(tile), size);
+    }
+    return nullptr;
+  }
+
   // Try getting it from the memmapped tar extract
   if (!tile_extract_->tiles.empty()) {
     // Do we have this tile
@@ -532,6 +561,8 @@ graph_tile_ptr GraphReader::GetGraphTile(const GraphId& graphid) {
     return cache_->Put(base, std::move(tile), size);
   } // Try getting it from flat file
   else {
+    // CARTOHACK
+#if HAVE_FILESYSTEM
     auto traffic_ptr = tile_extract_->traffic_tiles.find(base);
     auto traffic_memory = traffic_ptr != tile_extract_->traffic_tiles.end()
                               ? std::make_unique<TarballGraphMemory>(tile_extract_->traffic_archive,
@@ -569,6 +600,9 @@ graph_tile_ptr GraphReader::GetGraphTile(const GraphId& graphid) {
     // Keep a copy in the cache and return it
     const size_t size = tile->header()->end_offset();
     return cache_->Put(base, std::move(tile), size);
+#else
+    return nullptr;
+#endif
   }
 }
 
@@ -713,6 +747,10 @@ GraphId GraphReader::GetShortcut(const GraphId& id) {
 
   // If this edge is a shortcut return this edge Id
   graph_tile_ptr tile = GetGraphTile(id);
+  // CARTOHACK
+  if (!tile) {
+    return {};
+  }
   const DirectedEdge* directededge = tile->directededge(id);
   if (directededge->is_shortcut()) {
     return id;
@@ -737,6 +775,10 @@ GraphId GraphReader::GetShortcut(const GraphId& id) {
     GraphId endnode = cont_de->endnode();
     if (cont_de->leaves_tile()) {
       tile = GetGraphTile(endnode.Tile_Base());
+      // CARTOHACK
+      if (!tile) {
+        return {};
+      }
     }
     node = tile->node(endnode);
 
@@ -803,12 +845,20 @@ std::string GraphReader::encoded_edge_shape(const valhalla::baldr::GraphId& edge
 std::unordered_set<GraphId> GraphReader::GetTileSet() const {
   // either mmap'd tiles
   std::unordered_set<GraphId> tiles;
+
+  // CARTOHACK
+  if (mbtiles_db_) {
+    return mbtiles_db_->FindTiles(-1);
+  }
+
   if (tile_extract_->tiles.size()) {
     for (const auto& t : tile_extract_->tiles) {
       tiles.emplace(t.first);
     }
   } // or individually on disk
   else if (!tile_dir_.empty()) {
+    // CARTOHACK
+#if HAVE_FILESYSTEM
     // for each level
     for (uint8_t level = 0; level <= TileHierarchy::GetTransitLevel().level; ++level) {
       // crack open this level of tiles directory
@@ -826,6 +876,7 @@ std::unordered_set<GraphId> GraphReader::GetTileSet() const {
         }
       }
     }
+#endif
   }
 
   // give them back
@@ -836,6 +887,12 @@ std::unordered_set<GraphId> GraphReader::GetTileSet() const {
 std::unordered_set<GraphId> GraphReader::GetTileSet(const uint8_t level) const {
   // either mmap'd tiles
   std::unordered_set<GraphId> tiles;
+
+  // CARTOHACK
+  if (mbtiles_db_) {
+    return mbtiles_db_->FindTiles(level);
+  }
+
   if (tile_extract_->tiles.size()) {
     for (const auto& t : tile_extract_->tiles) {
       if (static_cast<GraphId>(t.first).level() == level) {
@@ -843,6 +900,8 @@ std::unordered_set<GraphId> GraphReader::GetTileSet(const uint8_t level) const {
       }
     } // or individually on disk
   } else if (!tile_dir_.empty()) {
+    // CARTOHACK
+#if HAVE_FILESYSTEM
     // crack open this level of tiles directory
     filesystem::path root_dir(tile_dir_ + filesystem::path::preferred_separator +
                               std::to_string(level) + filesystem::path::preferred_separator);
@@ -857,6 +916,7 @@ std::unordered_set<GraphId> GraphReader::GetTileSet(const uint8_t level) const {
         }
       }
     }
+#endif
   }
   return tiles;
 }
@@ -872,6 +932,9 @@ AABB2<PointLL> GraphReader::GetMinimumBoundingBox(const AABB2<PointLL>& bb) {
 
     // Look at every node in the tile
     auto tile = GetGraphTile(tile_id);
+    // CARTOHACK
+    if (!tile)
+      return min_bb;
     for (uint32_t i = 0; tile && i < tile->header()->nodecount(); i++) {
 
       // If the node is within the input bounding box

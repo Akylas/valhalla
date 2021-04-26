@@ -3,7 +3,12 @@
 #include "baldr/directededge.h"
 #include "baldr/edgeinfo.h"
 #include "baldr/nodeinfo.h"
-#include "config.h"
+// CARTOHACK
+//#include "config.h"
+// CARTOHACK
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION "unstable"
+#endif
 #include <string.h>
 
 using namespace valhalla::baldr;

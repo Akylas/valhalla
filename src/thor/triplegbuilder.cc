@@ -1138,8 +1138,17 @@ void TripLegBuilder::Build(
   // Get the first nodes graph id by using the end node of the first edge to get the tile with the
   // opposing edge then use the opposing index to get the opposing edge, and its end node is the
   // begin node of the original edge
-  auto* first_edge = graphreader.GetGraphTile(path_begin->edgeid)->directededge(path_begin->edgeid);
+  // CARTOHACK
+  auto first_edge_tile = graphreader.GetGraphTile(path_begin->edgeid);
+  if (!first_edge_tile) {
+    throw std::runtime_error("First edge tile missing");
+  }
+  auto* first_edge = first_edge_tile->directededge(path_begin->edgeid);
   auto first_tile = graphreader.GetGraphTile(first_edge->endnode());
+  // CARTOHACK
+  if (!first_tile) {
+    throw std::runtime_error("First tile missing");
+  }
   auto* first_node = first_tile->node(first_edge->endnode());
   GraphId startnode =
       first_tile->directededge(first_node->edge_index() + first_edge->opp_index())->endnode();
@@ -1213,6 +1222,10 @@ void TripLegBuilder::Build(
   for (auto edge_itr = path_begin; edge_itr != path_end; ++edge_itr, ++edge_index) {
     const GraphId& edge = edge_itr->edgeid;
     graphtile = graphreader.GetGraphTile(edge, graphtile);
+    // CARTOHACK
+    if (!graphtile) {
+      throw std::runtime_error("Graph tile missing");
+    }
     const DirectedEdge* directededge = graphtile->directededge(edge);
     const sif::TravelMode mode = edge_itr->mode;
     const uint8_t travel_type = travel_types[static_cast<uint32_t>(mode)];
@@ -1221,6 +1234,10 @@ void TripLegBuilder::Build(
     // Set node attributes - only set if they are true since they are optional
     graph_tile_ptr start_tile = graphtile;
     graphreader.GetGraphTile(startnode, start_tile);
+    // CARTOHACK
+    if (!start_tile) {
+      throw std::runtime_error("Graph tile missing");
+    }
     const NodeInfo* node = start_tile->node(startnode);
 
     if (osmchangeset == 0 && controller.attributes.at(kOsmChangeset)) {
@@ -1452,6 +1469,10 @@ void TripLegBuilder::Build(
   auto* node = trip_path.add_node();
   if (controller.attributes.at(kNodeAdminIndex)) {
     auto last_tile = graphreader.GetGraphTile(startnode);
+    // CARTOHACK
+    if (!last_tile) {
+      throw std::runtime_error("Last tile missing");
+    }
     node->set_admin_index(
         GetAdminIndex(last_tile->admininfo(last_tile->node(startnode)->admin_index()), admin_info_map,
                       admin_info_list));

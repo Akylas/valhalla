@@ -354,7 +354,12 @@ void Dijkstras::Compute(google::protobuf::RepeatedPtrField<valhalla::Location>& 
 
     const baldr::DirectedEdge* opp_pred_edge = nullptr;
     if (expansion_direction == ExpansionType::reverse) {
-      opp_pred_edge = graphreader.GetGraphTile(pred.opp_edgeid())->directededge(pred.opp_edgeid());
+      // CARTOHACK
+      auto opp_tile = graphreader.GetGraphTile(pred.opp_edgeid());
+      if (!opp_tile) {
+        return;
+      }
+      opp_pred_edge = opp_tile->directededge(pred.opp_edgeid());
     }
 
     // Check if we should stop
@@ -772,6 +777,10 @@ void Dijkstras::SetOriginLocations(GraphReader& graphreader,
 
       // Get the directed edge
       graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(edgeid);
 
       // Get the opposing directed edge, continue if we cannot get it
@@ -850,6 +859,10 @@ void Dijkstras::SetDestinationLocations(
 
       // Get the directed edge
       graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(edgeid);
 
       // Get the opposing directed edge, continue if we cannot get it
@@ -925,6 +938,10 @@ void Dijkstras::SetOriginLocationsMultiModal(
 
       // Get the directed edge
       graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(edgeid);
 
       // Get the tile at the end node. Skip if tile not found as we won't be

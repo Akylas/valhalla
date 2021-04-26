@@ -146,7 +146,8 @@ protected:
       }
       // actually make a spot in the cache synchronously
       try {
-        std::unique_lock<std::mutex>(state->mutex);
+        // CARTOHACK
+        std::unique_lock<std::mutex> lock(state->mutex);
         found = state->cache.insert({tile_id, {}}).first;
       } // if anything went wrong we have to catch it so that the mutex is unlocked
       catch (...) {
@@ -197,6 +198,8 @@ protected:
                     std::unordered_set<valhalla::baldr::GraphId> tileset,
                     std::shared_ptr<state_t> state,
                     std::function<bool(size_t)> interrupt) {
+// CARTOHACK
+#if HAVE_FILESYSTEM
     LOG_INFO("Incident watcher started");
     // try to configure for changelog mode
     std::unique_ptr<valhalla::midgard::sequence<uint64_t>> changelog;
@@ -332,6 +335,13 @@ protected:
     } while (!interrupt || !interrupt(run_count));
 
     LOG_INFO("Incident watcher has stopped");
+#else
+    if (state) {
+      state->initialized.store(true);
+      state->signal.notify_one();
+      return;
+    }
+#endif
   }
 
 public:

@@ -32,7 +32,7 @@ public:
 bool RegisterLogger(const std::string& name, LoggerCreator function_ptr);
 
 // the Log levels we support
-enum class LogLevel : char { TRACE, DEBUG, INFO, WARN, ERROR };
+enum class LogLevel : char { TRACE, DEBUG, INFO, WARN, ERROR, ERROR_SAFE = ERROR };
 
 // logger base class, not pure virtual so you can use as a null logger if you want
 class Logger {
@@ -48,7 +48,8 @@ protected:
 };
 
 // statically get a logger using the factory
-Logger& GetLogger(const LoggingConfig& config = {{"type", "std_out"}, {"color", "true"}});
+// CARTOHACK
+Logger& GetLogger(const LoggingConfig& config = {{"type", ""}, {"color", "true"}});
 
 // statically log manually without the macros below
 void Log(const std::string&, const LogLevel);
@@ -112,7 +113,7 @@ void Configure(const LoggingConfig& config);
 // all logging output
 #elif defined(LOGGING_LEVEL_ALL)
 #define LOG_ERROR(x)                                                                                 \
-  ::valhalla::midgard::logging::GetLogger().Log(x, ::valhalla::midgard::logging::LogLevel::ERROR)
+  ::valhalla::midgard::logging::GetLogger().Log(x, ::valhalla::midgard::logging::LogLevel::ERROR_SAFE)
 #define LOG_WARN(x)                                                                                  \
   ::valhalla::midgard::logging::GetLogger().Log(x, ::valhalla::midgard::logging::LogLevel::WARN)
 #define LOG_INFO(x)                                                                                  \
@@ -125,11 +126,11 @@ void Configure(const LoggingConfig& config);
 #else
 #ifdef LOGGING_LEVEL_ERROR
 #define LOG_ERROR(x)                                                                                 \
-  ::valhalla::midgard::logging::GetLogger().Log(x, ::valhalla::midgard::logging::LogLevel::ERROR)
+  ::valhalla::midgard::logging::GetLogger().Log(x, ::valhalla::midgard::logging::LogLevel::ERROR_SAFE)
 #define LOGLN_ERROR(x)                                                                               \
   ::valhalla::midgard::logging::GetLogger().Log(std::string(__FILE__) + ": " +                       \
                                                     std::to_string(__LINE__) + ": " + x,             \
-                                                ::valhalla::midgard::logging::LogLevel::ERROR)
+                                                ::valhalla::midgard::logging::LogLevel::ERROR_SAFE)
 #else
 #define LOG_ERROR(x)
 #define LOGLN_ERROR(x)

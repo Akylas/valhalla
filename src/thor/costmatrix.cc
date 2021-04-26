@@ -655,8 +655,12 @@ void CostMatrix::BackwardSearch(const uint32_t index, GraphReader& graphreader) 
       if (pred.opp_edgeid().Tile_Base() == tile->id().Tile_Base()) {
         opp_pred_edge = tile->directededge(pred.opp_edgeid().id());
       } else {
-        opp_pred_edge =
-            graphreader.GetGraphTile(pred.opp_edgeid().Tile_Base())->directededge(pred.opp_edgeid());
+        // CARTOHACK
+        auto opp_tile = graphreader.GetGraphTile(pred.opp_edgeid().Tile_Base());
+        if (!opp_tile) {
+          return;
+        }
+        opp_pred_edge = opp_tile->directededge(pred.opp_edgeid());
       }
       expand(tile, node, nodeinfo, index, pred, pred_idx, opp_pred_edge, false);
     }
@@ -700,6 +704,10 @@ void CostMatrix::SetSources(GraphReader& graphreader,
 
       // Get the directed edge and the opposing edge Id
       graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(edgeid);
       GraphId oppedge = graphreader.GetOpposingEdgeId(edgeid);
 
@@ -778,6 +786,10 @@ void CostMatrix::SetTargets(baldr::GraphReader& graphreader,
 
       // Get the directed edge
       graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+      // CARTOHACK
+      if (!tile) {
+        continue;
+      }
       const DirectedEdge* directededge = tile->directededge(edgeid);
 
       // Get the opposing directed edge, continue if we cannot get it

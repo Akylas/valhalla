@@ -409,8 +409,12 @@ TimeDepReverse::GetBestPath(valhalla::Location& origin,
 
     // Get the opposing predecessor directed edge. Need to make sure we get
     // the correct one if a transition occurred
-    const DirectedEdge* opp_pred_edge =
-        graphreader.GetGraphTile(pred.opp_edgeid())->directededge(pred.opp_edgeid());
+    // CARTOHACK
+    auto opp_tile = graphreader.GetGraphTile(pred.opp_edgeid());
+    if (!opp_tile) {
+      return {};
+    }
+    const DirectedEdge* opp_pred_edge = opp_tile->directededge(pred.opp_edgeid());
 
     // Expand forward from the end node of the predecessor edge.
     ExpandReverse(graphreader, pred.endnode(), pred, predindex, opp_pred_edge, reverse_time_info,
@@ -460,6 +464,10 @@ void TimeDepReverse::SetOrigin(GraphReader& graphreader,
     // Get the directed edge
     GraphId edgeid(edge.graph_id());
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the opposing directed edge, continue if we cannot get it
@@ -561,6 +569,10 @@ uint32_t TimeDepReverse::SetDestination(GraphReader& graphreader, const valhalla
     // up to the end of the destination edge.
     GraphId id(edge.graph_id());
     auto tile = graphreader.GetGraphTile(id);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(id);
 
     // The opposing edge Id is added as a destination since the search

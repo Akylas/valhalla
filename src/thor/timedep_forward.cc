@@ -459,6 +459,10 @@ void TimeDepForward::SetOrigin(GraphReader& graphreader,
 
     // Get the directed edge
     const auto tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -565,6 +569,10 @@ uint32_t TimeDepForward::SetDestination(GraphReader& graphreader, const valhalla
 
     // Get the tile relative density
     auto tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     density = tile->header()->density();
   }
   return density;

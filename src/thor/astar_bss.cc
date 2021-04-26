@@ -303,6 +303,10 @@ AStarBSSAlgorithm::GetBestPath(valhalla::Location& origin,
     EdgeLabel pred = edgelabels_[predindex];
 
     graph_tile_ptr tile = graphreader.GetGraphTile(pred.endnode());
+    // CARTOHACK
+    if (!tile) {
+      return {};
+    }
     auto ll = tile->get_node_ll(pred.endnode());
 
     if (destinations_.find(pred.edgeid()) != destinations_.end() &&
@@ -393,6 +397,10 @@ void AStarBSSAlgorithm::SetOrigin(GraphReader& graphreader,
 
     // Get the directed edge
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -502,6 +510,9 @@ uint32_t AStarBSSAlgorithm::SetDestination(GraphReader& graphreader, const valha
     // Keep the cost to traverse the partial distance for the remainder of the edge. This cost
     // is subtracted from the total cost up to the end of the destination edge.
     auto tile = graphreader.GetGraphTile(edgeid);
+    if (!tile) {
+      continue;
+    }
     assert(tile);
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
@@ -535,6 +546,10 @@ std::vector<PathInfo> AStarBSSAlgorithm::FormPath(baldr::GraphReader& graphreade
                       edgelabel.restriction_idx(), edgelabel.transition_cost());
 
     graph_tile_ptr tile = graphreader.GetGraphTile(edgelabel.edgeid());
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgelabel.edgeid());
     auto ll = tile->get_node_ll(directededge->endnode());
 

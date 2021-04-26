@@ -564,7 +564,11 @@ void MultiModalPathAlgorithm::SetOrigin(GraphReader& graphreader,
     }
 
     // Get the directed edge
+    // CARTOHACK
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be
@@ -670,7 +674,11 @@ uint32_t MultiModalPathAlgorithm::SetDestination(GraphReader& graphreader,
 
     // Keep the cost to traverse the partial distance for the remainder of the edge. This cost
     // is subtracted from the total cost up to the end of the destination edge.
+    // CARTOHACK
     graph_tile_ptr tile = graphreader.GetGraphTile(edgeid);
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* dest_diredge = tile->directededge(edgeid);
     destinations_[edge.graph_id()] =
         costing->EdgeCost(dest_diredge, tile) * (1.0f - edge.percent_along());
@@ -801,6 +809,10 @@ bool MultiModalPathAlgorithm::CanReachDestination(const valhalla::Location& dest
     }
 
     graph_tile_ptr tile = graphreader.GetGraphTile(oppedge);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* diredge = tile->directededge(oppedge);
     uint32_t length = static_cast<uint32_t>(diredge->length()) * ratio;
     Cost cost = costing->EdgeCost(diredge, tile) * ratio;

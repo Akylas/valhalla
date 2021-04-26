@@ -643,7 +643,8 @@ public:
    * @param idx  Local edge index at the start.
    */
   bool name_consistency(const uint32_t idx) const {
-    return name_consistency_ & (1 << idx);
+    // CARTOHACK
+    return name_consistency_ & (1ULL << idx);
   }
 
   /**
@@ -879,7 +880,8 @@ public:
    * @return  Returns true if there is an edge to the left, false if not.
    */
   bool edge_to_left(const uint32_t localidx) const {
-    return (edge_to_left_ & (1 << localidx));
+    // CARTOHACK
+    return (edge_to_left_ & (1ULL << localidx));
   }
 
   /**

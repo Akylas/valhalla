@@ -9,7 +9,10 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+// CARTOHACK
+#ifndef _WIN32
 #include <dirent.h>
+#endif
 #include <iomanip>
 #include <memory>
 #include <stdexcept>
@@ -135,6 +138,9 @@ std::basic_istream<CharT, Traits>& operator>>(std::basic_istream<CharT, Traits>&
 }
 
 bool exists(const filesystem::path& p);
+
+// CARTOHACK
+#ifndef _WIN32
 class directory_iterator;
 class recursive_directory_iterator;
 class directory_entry {
@@ -474,5 +480,6 @@ inline std::uintmax_t remove_all(const path& p) {
 
   return num_removed;
 }
+#endif
 
 } // namespace filesystem

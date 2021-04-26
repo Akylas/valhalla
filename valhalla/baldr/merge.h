@@ -94,7 +94,11 @@ void merge(TileSet& tiles,
   // Iterate over tiles. Merge edges at nodes where the edges can be collapsed.
   for (GraphId tile_id : tiles) {
     auto tile = reader.GetGraphTile(tile_id);
-    assert(tile);
+    // CARTOHACK
+    //assert(tile);
+    if (!tile) {
+      continue;
+    }
     uint32_t node_count = tile->header()->nodecount();
     GraphId node_id(tile_id.tileid(), tile_id.level(), 0);
     for (uint32_t i = 0; i < node_count; ++i, ++node_id) {
@@ -110,7 +114,11 @@ void merge(TileSet& tiles,
   // Iterate over tiles. Handle single edges that remain.
   for (GraphId tile_id : tiles) {
     auto tile = reader.GetGraphTile(tile_id);
-    assert(tile);
+    // CARTOHACK
+    //assert(tile);
+    if (!tile) {
+      continue;
+    }
     const auto num_edges = tile->header()->directededgecount();
     GraphId edge_id(tile_id.tileid(), tile_id.level(), 0);
     for (uint32_t i = 0; i < num_edges; ++i, ++edge_id) {

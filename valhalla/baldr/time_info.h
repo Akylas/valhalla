@@ -105,7 +105,8 @@ struct TimeInfo {
   make(std::string& date_time,
        int timezone_index,
        baldr::DateTime::tz_sys_info_cache_t* tz_cache = nullptr,
-       int default_timezone_index = baldr::DateTime::get_tz_db().to_index("Etc/UTC")) {
+       // CARTOHACK
+       int default_timezone_index = (int)baldr::DateTime::get_tz_db().to_index("Etc/UTC")) {
     // No time to to track
     if (date_time.empty())
       return TimeInfo::invalid();
@@ -114,7 +115,8 @@ struct TimeInfo {
     if (timezone_index == 0) {
       // Don't use the provided one if its not valid
       if (!dt::get_tz_db().from_index(default_timezone_index)) {
-        default_timezone_index = baldr::DateTime::get_tz_db().to_index("Etc/UTC");
+        // CARTOHACK
+        default_timezone_index = (int)baldr::DateTime::get_tz_db().to_index("Etc/UTC");
       }
       LOG_WARN("No timezone for location using default");
       timezone_index = default_timezone_index;

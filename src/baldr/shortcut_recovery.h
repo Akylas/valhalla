@@ -39,7 +39,10 @@ protected:
           reader->Trim();
         // this shouldnt fail but garbled files could cause it
         auto tile = reader->GetGraphTile(tile_id);
-        assert(tile);
+        // CARTOHACK
+        //assert(tile);
+        if (!tile)
+          continue;
         // for each edge in the tile
         for (const auto& edge : tile->GetDirectedEdges()) {
           // skip non-shortcuts or the shortcut is one we wont use

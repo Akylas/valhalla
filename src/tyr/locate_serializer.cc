@@ -58,6 +58,10 @@ json::ArrayPtr serialize_edges(const PathLocation& location, GraphReader& reader
     try {
       // get the osm way id
       auto tile = reader.GetGraphTile(edge.id);
+      // CARTOHACK
+      if (!tile) {
+        throw std::runtime_error("Missing tile");
+      }
       auto* directed_edge = tile->directededge(edge.id);
       auto edge_info = tile->edgeinfo(directed_edge);
       // they want MOAR!
@@ -125,7 +129,12 @@ json::ArrayPtr serialize_nodes(const PathLocation& location, GraphReader& reader
   std::unordered_set<uint64_t> nodes;
   for (const auto& e : location.edges) {
     if (e.end_node()) {
-      nodes.emplace(reader.GetGraphTile(e.id)->directededge(e.id)->endnode());
+      // CARTOHACK
+      auto tile = reader.GetGraphTile(e.id);
+      if (!tile) {
+        throw std::runtime_error("Missing tile");
+      }
+      nodes.emplace(tile->directededge(e.id)->endnode());
     }
   }
   // ad them into an array of json
@@ -133,6 +142,10 @@ json::ArrayPtr serialize_nodes(const PathLocation& location, GraphReader& reader
   for (auto node_id : nodes) {
     GraphId n(node_id);
     graph_tile_ptr tile = reader.GetGraphTile(n);
+    // CARTOHACK
+    if (!tile) {
+      throw std::runtime_error("Missing tile");
+    }
     auto* node_info = tile->node(n);
     json::MapPtr node;
     if (verbose) {

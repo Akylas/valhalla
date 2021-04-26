@@ -222,6 +222,10 @@ thor_worker_t::map_match(Api& request) {
 
         // Make one path edge from it
         reader->GetGraphTile(match.edgeid, tile);
+        // CARTOHACK
+        if (!tile) {
+          continue;
+        }
         auto* pe = options.mutable_shape(i)->mutable_path_edges()->Add();
         pe->mutable_ll()->set_lat(match.lnglat.lat());
         pe->mutable_ll()->set_lng(match.lnglat.lng());

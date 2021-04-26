@@ -210,6 +210,10 @@ private:
           if (dir_edge->use() == Use::kPlatformConnection) {
             GraphId endnode = dir_edge->endnode();
             graph_tile_ptr endtile = graphreader.GetGraphTile(endnode);
+            // CARTOHACK
+            if (!endtile) {
+              throw std::runtime_error("Missing tile");
+            }
             const NodeInfo* nodeinfo2 = endtile->node(endnode);
             const TransitStop* transit_station = endtile->GetTransitStop(nodeinfo2->stop_index());
 

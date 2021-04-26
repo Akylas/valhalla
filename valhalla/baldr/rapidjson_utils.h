@@ -49,8 +49,26 @@ inline std::string to_string(const rapidjson::Value& value, int decimal_places =
  */
 
 // if you dont want an arithmetic type dont try any lexical casting
+// CARTOHACK
 template <typename T, typename V>
-inline typename std::enable_if<!std::is_arithmetic<T>::value, boost::optional<T>>::type
+inline typename std::enable_if<std::is_convertible<T, std::string>::value, boost::optional<T>>::type
+get_optional(V&& v, const char* source) {
+  // if we dont have this key bail
+  auto* ptr = rapidjson::Pointer{source}.Get(std::forward<V>(v));
+  if (!ptr) {
+    return boost::none;
+  }
+  // if its the exact right type give it back
+  if (ptr->template Is<const char*>()) {
+    return T(ptr->template Get<const char*>());
+  }
+  // give up
+  return boost::none;
+}
+
+// CARTOHACK
+template <typename T, typename V>
+inline typename std::enable_if<!std::is_arithmetic<T>::value && !std::is_convertible<T, std::string>::value, boost::optional<T>>::type
 get_optional(V&& v, const char* source) {
   // if we dont have this key bail
   auto* ptr = rapidjson::Pointer{source}.Get(std::forward<V>(v));
@@ -299,7 +317,8 @@ public:
 
   inline void operator()(const char* key, const std::string& value) {
     writer.String(key);
-    writer.String(value);
+    // CARTOHACK
+    writer.String(value.c_str());
   }
 
   inline void operator()(const char* key, const double value) {
@@ -328,37 +347,44 @@ public:
   }
 
   inline void operator()(const std::string& key, const char* value) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.String(value);
   }
 
   inline void operator()(const std::string& key, const std::string& value) {
-    writer.String(key);
-    writer.String(value);
+    // CARTOHACK
+    writer.String(key.c_str());
+    writer.String(value.c_str());
   }
 
   inline void operator()(const std::string& key, const double value) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.Double(value);
   }
 
   inline void operator()(const std::string& key, const uint64_t value) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.Uint64(value);
   }
 
   inline void operator()(const std::string& key, const int64_t value) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.Int64(value);
   }
 
   inline void operator()(const std::string& key, const bool value) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.Bool(value);
   }
 
   inline void operator()(const std::string& key, const std::nullptr_t) {
-    writer.String(key);
+    // CARTOHACK
+    writer.String(key.c_str());
     writer.Null();
   }
 
@@ -367,7 +393,8 @@ public:
   }
 
   inline void operator()(const std::string& value) {
-    writer.String(value);
+    // CARTOHACK
+    writer.String(value.c_str());
   }
 
   inline void operator()(const double value) {
