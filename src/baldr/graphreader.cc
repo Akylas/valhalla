@@ -18,7 +18,7 @@ using namespace valhalla::midgard;
 
 namespace {
 // CARTOHACK
-constexpr size_t DEFAULT_MAX_CACHE_SIZE = 2097152;    // 2 megs
+constexpr size_t DEFAULT_MAX_CACHE_SIZE = 16777216;   // 16 megs
 constexpr size_t AVERAGE_TILE_SIZE = 2097152;         // 2 megs
 constexpr size_t AVERAGE_MM_TILE_SIZE = 1024;         // 1k
 

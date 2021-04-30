@@ -31,10 +31,14 @@ public:
   virtual ~NarrativeBuilder() = default;
 
   NarrativeBuilder(NarrativeBuilder&&) = default;
-  NarrativeBuilder& operator=(NarrativeBuilder&&) = default;
+  // CARTOHACK
+  NarrativeBuilder& operator=(NarrativeBuilder&&) = delete;
+  //NarrativeBuilder& operator=(NarrativeBuilder&&) = default;
 
   NarrativeBuilder(const NarrativeBuilder&) = default;
-  NarrativeBuilder& operator=(const NarrativeBuilder&) = default;
+  // CARTOHACK
+  NarrativeBuilder& operator=(const NarrativeBuilder&) = delete;
+  //NarrativeBuilder& operator=(const NarrativeBuilder&) = default;
 
   void Build(std::list<Maneuver>& maneuvers);
 

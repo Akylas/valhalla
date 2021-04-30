@@ -20,8 +20,6 @@ namespace {
 static bool inflate(const void* in_data, size_t in_size, std::vector<char>& out) {
   const unsigned char* in = reinterpret_cast<const unsigned char*>(in_data);
 
-  out.reserve(in_size);
-
   std::vector<unsigned char> buf(16384);
   ::z_stream infstream;
   std::memset(&infstream, 0, sizeof(infstream));
@@ -49,8 +47,6 @@ static bool inflate(const void* in_data, size_t in_size, std::vector<char>& out)
 
 static bool inflate_raw(const void* in_data, std::size_t in_size, const void* dict, std::size_t dict_size, std::vector<char>& out) {
   const unsigned char* in = reinterpret_cast<const unsigned char*>(in_data);
-
-  out.reserve(in_size);
 
   std::vector<unsigned char> buf(16384);
   ::z_stream infstream;
