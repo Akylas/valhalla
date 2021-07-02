@@ -9,7 +9,8 @@
 
 #include <boost/property_tree/ptree.hpp>
 
-#include <valhalla/baldr/curler.h>
+// CARTOHACK
+//#include <valhalla/baldr/curler.h>
 #include <valhalla/baldr/graphid.h>
 #include <valhalla/baldr/graphtile.h>
 #include <valhalla/baldr/tilegetter.h>

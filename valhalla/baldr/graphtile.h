@@ -3,7 +3,8 @@
 #include <valhalla/baldr/accessrestriction.h>
 #include <valhalla/baldr/admininfo.h>
 #include <valhalla/baldr/complexrestriction.h>
-#include <valhalla/baldr/curler.h>
+// CARTOHACK
+//#include <valhalla/baldr/curler.h>
 #include <valhalla/baldr/datetime.h>
 #include <valhalla/baldr/directededge.h>
 #include <valhalla/baldr/edgeinfo.h>

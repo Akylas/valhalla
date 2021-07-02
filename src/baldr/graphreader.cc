@@ -6,7 +6,8 @@
 // CARTOHACK
 #include "baldr/graphreader_mbtiles.h"
 #include "baldr/connectivity_map.h"
-#include "baldr/curl_tilegetter.h"
+// CARTOHACK
+//#include "baldr/curl_tilegetter.h"
 #include "baldr/graphreader.h"
 #include "filesystem.h"
 #include "incident_singleton.h"
@@ -431,11 +432,14 @@ GraphReader::GraphReader(const boost::property_tree::ptree& pt,
       tile_url_(pt.get<std::string>("tile_url", "")), cache_(TileCacheFactory::createTileCache(pt)) {
 
   // Make a tile fetcher if we havent passed one in from somewhere else
+// CARTOHACK
+/*
   if (!tile_getter_ && !tile_url_.empty()) {
     tile_getter_ = std::make_unique<curl_tile_getter_t>(max_concurrent_users_,
                                                         pt.get<std::string>("user_agent", ""),
                                                         pt.get<bool>("tile_url_gz", false));
   }
+*/
 
   // validate tile url
   if (!tile_url_.empty() && tile_url_.find(GraphTile::kTilePathPattern) == std::string::npos)
