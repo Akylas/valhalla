@@ -546,10 +546,15 @@ std::vector<std::vector<PathInfo>> UnidirectionalAStar<expansion_direction, FORW
 
     // Get the opposing predecessor directed edge. Need to make sure we get
     // the correct one if a transition occurred
-    const DirectedEdge* opp_pred_edge =
-        FORWARD ? nullptr
-                : graphreader.GetGraphTile(pred.opp_edgeid())->directededge(pred.opp_edgeid());
-
+    // CARTOHACK
+    const DirectedEdge* opp_pred_edge = nullptr;
+    if (!FORWARD) {
+      auto opp_edge_tile = graphreader.GetGraphTile(pred.opp_edgeid());
+      if (!opp_edge_tile) {
+        return {};
+      }
+      opp_pred_edge = opp_edge_tile->directededge(pred.opp_edgeid());
+    }
     // Expand forward from the end node of the predecessor edge.
     Expand(graphreader, pred.endnode(), pred, predindex, opp_pred_edge, time_info, destination,
            best_path);
@@ -699,6 +704,10 @@ void UnidirectionalAStar<expansion_direction, FORWARD>::SetOrigin(
 
     // Get the directed edge
     const auto tile = graphreader.GetGraphTile(edgeid);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     const DirectedEdge* directededge = tile->directededge(edgeid);
 
     // Get the tile at the end node. Skip if tile not found as we won't be

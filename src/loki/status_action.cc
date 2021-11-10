@@ -13,6 +13,10 @@ auto get_graphtile(const std::shared_ptr<valhalla::baldr::GraphReader>& reader) 
   graph_tile_ptr tile = nullptr;
   for (const auto& tile_id : reader->GetTileSet()) {
     tile = reader->GetGraphTile(tile_id);
+    // CARTOHACK
+    if (!tile) {
+      break;
+    }
     if (tile->id().level() < valhalla::baldr::TileHierarchy::GetTransitLevel().level &&
         tile->header()->nodecount() > 0) {
       break;

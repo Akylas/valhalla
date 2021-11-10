@@ -1663,6 +1663,10 @@ void TripLegBuilder::Build(
 
     graph_tile_ptr end_node_tile = graphtile;
     graphreader.GetGraphTile(directededge->endnode(), end_node_tile);
+    // CARTOHACK
+    if (!end_node_tile) {
+      throw tile_gone_error_t("TripLegBuilder::Build failed", startnode);
+    }
     SetShapeAttributes(controller, graphtile, end_node_tile, directededge, trip_shape, begin_index,
                        trip_path, trim_start_pct, trim_end_pct, edge_seconds,
                        costing->flow_mask() & kCurrentFlowMask, incidents);

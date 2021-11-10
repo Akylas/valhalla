@@ -62,6 +62,10 @@ std::string to_geojson(const std::unordered_set<vb::GraphId>& edge_ids, vb::Grap
   auto features = array({});
   for (const auto& edge_id : edge_ids) {
     auto tile = reader.GetGraphTile(edge_id);
+    // CARTOHACK
+    if (!tile) {
+      continue;
+    }
     auto edge = tile->directededge(edge_id);
     auto shape = tile->edgeinfo(edge).shape();
     if (!edge->forward()) {
