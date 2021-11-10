@@ -146,7 +146,6 @@ protected:
       }
       // actually make a spot in the cache synchronously
       try {
-        // CARTOHACK
         std::unique_lock<std::mutex> lock(state->mutex);
         found = state->cache.insert({tile_id, {}}).first;
       } // if anything went wrong we have to catch it so that the mutex is unlocked
