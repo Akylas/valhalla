@@ -104,7 +104,11 @@ protected:
     using namespace valhalla::baldr;
     // grab the shortcut edge
     auto tile = reader.GetGraphTile(shortcut_id);
-    assert(tile);
+    // CARTOHACK
+    //assert(tile);
+    if (!tile) {
+      return {shortcut_id};
+    }
     const DirectedEdge* shortcut = tile->directededge(shortcut_id);
 
     // bail if this isnt a shortcut

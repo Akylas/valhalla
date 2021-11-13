@@ -114,11 +114,8 @@ D--3--4--C--5--6--E)";
 
   auto shape =
       midgard::decode<std::vector<midgard::PointLL>>(result.trip().routes(0).legs(0).shape());
-  // TODO: Remove the duplicate 6 when we fix odin to handle uturn maneuver generation with only one
-  // turn around point
   auto expected_shape = decltype(shape){
-      map.nodes["2"], map.nodes["B"], map.nodes["C"], map.nodes["6"],
-      map.nodes["6"], map.nodes["C"], map.nodes["3"],
+      map.nodes["2"], map.nodes["B"], map.nodes["C"], map.nodes["6"], map.nodes["C"], map.nodes["3"],
   };
   EXPECT_EQ(shape.size(), expected_shape.size());
   for (int i = 0; i < shape.size(); ++i) {
@@ -316,4 +313,30 @@ TEST_F(TrafficBasedTest, forward) {
     EXPECT_EQ(api.trip().routes(0).legs(0).algorithms(0), "map_snap");
     EXPECT_EQ(speed_from_edge(api), freeflow);
   }
+}
+
+TEST(MapMatchRoute, IgnoreRestrictions) {
+  const std::string ascii_map = R"(
+    A------B----C
+     )";
+
+  const gurka::ways ways = {
+      {"AB", {{"highway", "motorway"}}},
+      {"BC", {{"highway", "motorway"}}},
+  };
+  const gurka::nodelayout layout = gurka::detail::map_to_coordinates(ascii_map, 100);
+  const gurka::relations relations = {{{
+                                           {gurka::way_member, "AB", "from"},
+                                           {gurka::way_member, "BC", "to"},
+                                           {gurka::node_member, "B", "via"},
+                                       },
+                                       {{"type", "restriction"}, {"restriction", "no_straight_on"}}}};
+  const gurka::map map =
+      gurka::buildtiles(layout, ways, {}, relations, "test/data/mapmatch_restrictions",
+                        {{"mjolnir.timezone", VALHALLA_BUILD_DIR "test/data/tz.sqlite"}});
+
+  // ignore_restrictions when route with map_matching
+  auto result = gurka::do_action(valhalla::Options::trace_route, map, {"A", "C"}, "auto",
+                                 {{"/costing_options/auto/ignore_restrictions", "1"}});
+  gurka::assert::raw::expect_path(result, {"AB", "BC"});
 }

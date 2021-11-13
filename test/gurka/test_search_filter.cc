@@ -797,7 +797,7 @@ TEST_P(ExcludeClosuresOnWaypoints, ConflictingOptions) {
 std::vector<std::string> buildParams() {
   // Return the different costings we want to test closures against
   return {
-      "auto", "motorcycle", "motor_scooter", "bus", "truck", "hov", "taxi",
+      "auto", "motorcycle", "motor_scooter", "bus", "truck", "taxi",
   };
 }
 
@@ -1057,7 +1057,7 @@ TEST_P(ClosuresWithTimedepRoutes, IgnoreClosureWithTimedepReverse) {
                                     {"/date_time/value", "current"},
                                     {costing_speed_type, "current"}},
                                    reader);
-    gurka::assert::raw::expect_path(result, {"AB", "BC", "CD", "DE", "EF", "FG", "GH"});
+    gurka::assert::raw::expect_path(result, {"BC", "CD", "DE", "EF", "FG", "GH"});
   }
   {
     LiveTrafficCustomize close_edge = [](baldr::GraphReader& reader, baldr::TrafficTile& tile,
@@ -1076,7 +1076,7 @@ TEST_P(ClosuresWithTimedepRoutes, IgnoreClosureWithTimedepReverse) {
          std::to_string(closure_map.nodes.at("H").lng()) % costing % costing % date_type)
             .str();
     auto result = gurka::do_action(valhalla::Options::route, closure_map, req, reader);
-    gurka::assert::raw::expect_path(result, {"AB", "BC", "CD", "DE", "EF", "FG", "GH"});
+    gurka::assert::raw::expect_path(result, {"BC", "CD", "DE", "EF", "FG", "GH"});
   }
   // Close an interdmediate edge. Route should avoid it while not ignoring the
   // consecutive closures at destination
@@ -1096,7 +1096,7 @@ TEST_P(ClosuresWithTimedepRoutes, IgnoreClosureWithTimedepReverse) {
          std::to_string(closure_map.nodes.at("H").lng()) % costing % costing % date_type)
             .str();
     auto result = gurka::do_action(valhalla::Options::route, closure_map, req, reader);
-    gurka::assert::raw::expect_path(result, {"AB", "BC", "CD", "DIJE", "EF", "FG", "GH"});
+    gurka::assert::raw::expect_path(result, {"BC", "CD", "DIJE", "EF", "FG", "GH"});
   }
 
   // TODO: Ensure this test work with timedep fwd (date_type = "0")

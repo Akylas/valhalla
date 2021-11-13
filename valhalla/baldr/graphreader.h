@@ -30,6 +30,11 @@ class database;
 namespace valhalla {
 namespace baldr {
 
+struct tile_gone_error_t : public std::runtime_error {
+  explicit tile_gone_error_t(const std::string& errormessage);
+  tile_gone_error_t(std::string prefix, baldr::GraphId edgeid);
+};
+
 struct IncidentResult {
   std::shared_ptr<const IncidentsTile> tile;
   // Index into the Location array
@@ -464,6 +469,13 @@ public:
    * @param  graphid  GraphId of the tile to test (tile id and level).
    */
   virtual bool DoesTileExist(const GraphId& graphid) const;
+
+  /**
+   * Test if traffic tiles exist.   *
+   */
+  bool HasLiveTraffic() {
+    return !tile_extract_->traffic_tiles.empty();
+  }
 
   /**
    * Get a pointer to a graph tile object given a GraphId.
