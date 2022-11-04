@@ -1,8 +1,9 @@
 #include "baldr/graphtile.h"
+
 #include "baldr/compression_utils.h"
+#include "baldr/curl_tilegetter.h"
 #include "baldr/datetime.h"
 #include "baldr/sign.h"
-#include "baldr/tilegetter.h"
 #include "baldr/tilehierarchy.h"
 #include "filesystem.h"
 #include "midgard/aabb2.h"
@@ -29,14 +30,6 @@ using namespace valhalla::midgard;
 namespace {
 const AABB2<PointLL> world_box(PointLL(-180, -90), PointLL(180, 90));
 constexpr float COMPRESSION_HINT = 3.5f;
-
-std::string MakeSingleTileUrl(const std::string& tile_url, const valhalla::baldr::GraphId& graphid) {
-  auto id_pos = tile_url.find(valhalla::baldr::GraphTile::kTilePathPattern);
-  return tile_url.substr(0, id_pos) +
-         valhalla::baldr::GraphTile::FileSuffix(graphid.Tile_Base(),
-                                                valhalla::baldr::SUFFIX_NON_COMPRESSED, false) +
-         tile_url.substr(id_pos + std::strlen(valhalla::baldr::GraphTile::kTilePathPattern));
-}
 
 // the point of this function is to avoid race conditions for writing a tile between threads
 // so the easiest thing to do is just use the thread id to differentiate
@@ -106,9 +99,18 @@ graph_tile_ptr GraphTile::DecompressTile(const GraphId& graphid,
 graph_tile_ptr GraphTile::Create(const std::string& tile_dir,
                                  const GraphId& graphid,
                                  std::unique_ptr<const GraphMemory>&& traffic_memory) {
+  if (!graphid.Is_Valid()) {
+    LOG_ERROR("Failed to build GraphTile. Error: GraphId is invalid");
+    return nullptr;
+  }
 
-  // Don't bother with invalid ids
-  if (!graphid.Is_Valid() || graphid.level() > TileHierarchy::get_max_level() || tile_dir.empty()) {
+  if (graphid.level() > TileHierarchy::get_max_level()) {
+    LOG_ERROR("Failed to build GraphTile. Error: GraphId level exceeds tile hierarchy max level");
+    return nullptr;
+  }
+
+  if (tile_dir.empty()) {
+    LOG_ERROR("Failed to build GraphTile. Error: Tile dir is empty");
     return nullptr;
   }
 
@@ -214,28 +216,38 @@ void GraphTile::SaveTileToFile(const std::vector<char>& tile_data, const std::st
 
 // CARTOHACK
 #if HAVE_FILESYSTEM
+void store(const std::string& cache_location,
+           const GraphId& graphid,
+           const tile_getter_t* tile_getter,
+           const std::vector<char>& raw_data) {
+  if (!cache_location.empty()) {
+    auto suffix =
+        valhalla::baldr::GraphTile::FileSuffix(graphid.Tile_Base(),
+                                               (tile_getter->gzipped()
+                                                    ? valhalla::baldr::SUFFIX_COMPRESSED
+                                                    : valhalla::baldr::SUFFIX_NON_COMPRESSED));
+    auto disk_location = cache_location + filesystem::path::preferred_separator + suffix;
+    filesystem::save(disk_location, raw_data);
+  }
+}
+
 graph_tile_ptr GraphTile::CacheTileURL(const std::string& tile_url,
                                        const GraphId& graphid,
                                        tile_getter_t* tile_getter,
                                        const std::string& cache_location) {
   // Don't bother with invalid ids
-  if (!graphid.Is_Valid() || graphid.level() > TileHierarchy::get_max_level()) {
+  if (!graphid.Is_Valid() || graphid.level() > TileHierarchy::get_max_level() || !tile_getter) {
     return nullptr;
   }
 
-  auto uri = MakeSingleTileUrl(tile_url, graphid);
-  auto result = tile_getter->get(uri);
+  auto fname = valhalla::baldr::GraphTile::FileSuffix(graphid.Tile_Base(),
+                                                      valhalla::baldr::SUFFIX_NON_COMPRESSED, false);
+  auto result = tile_getter->get(baldr::make_single_point_url(tile_url, fname));
   if (result.status_ != tile_getter_t::status_code_t::SUCCESS) {
     return nullptr;
   }
   // try to cache it on disk so we dont have to keep fetching it from url
-  if (!cache_location.empty()) {
-    auto suffix = FileSuffix(graphid.Tile_Base(),
-                             (tile_getter->gzipped() ? valhalla::baldr::SUFFIX_COMPRESSED
-                                                     : valhalla::baldr::SUFFIX_NON_COMPRESSED));
-    auto disk_location = cache_location + filesystem::path::preferred_separator + suffix;
-    SaveTileToFile(result.bytes_, disk_location);
-  }
+  store(cache_location, graphid, tile_getter, result.bytes_);
 
   // turn the memory into a tile
   if (tile_getter->gzipped()) {
@@ -258,9 +270,10 @@ void GraphTile::Initialize(const GraphId& graphid) {
   char* const tile_ptr = memory_->data;
   const size_t tile_size = memory_->size;
 
-  if (tile_size < sizeof(GraphTileHeader))
+  if (tile_size < sizeof(GraphTileHeader)) {
     throw std::runtime_error("Invalid tile data size = " + std::to_string(tile_size) +
                              ". Tile file might me corrupted");
+  }
 
   char* ptr = tile_ptr;
   header_ = reinterpret_cast<GraphTileHeader*>(ptr);
@@ -419,8 +432,10 @@ void GraphTile::AssociateOneStopIds(const GraphId& graphid) {
   }
 }
 
-std::string
-GraphTile::FileSuffix(const GraphId& graphid, const std::string& fname_suffix, bool is_file_path) {
+std::string GraphTile::FileSuffix(const GraphId& graphid,
+                                  const std::string& fname_suffix,
+                                  bool is_file_path,
+                                  const TileLevel* tiles) {
   /*
   if you have a graphid where level == 8 and tileid == 24134109851 you should get:
   8/024/134/109/851.gph since the number of levels is likely to be very small this limits the total
@@ -430,16 +445,18 @@ GraphTile::FileSuffix(const GraphId& graphid, const std::string& fname_suffix, b
   */
 
   // figure the largest id for this level
-  if (graphid.level() >= TileHierarchy::levels().size() &&
-      graphid.level() != TileHierarchy::GetTransitLevel().level) {
+  if ((tiles && tiles->level != graphid.level()) ||
+      (!tiles && graphid.level() >= TileHierarchy::levels().size() &&
+       graphid.level() != TileHierarchy::GetTransitLevel().level)) {
     throw std::runtime_error("Could not compute FileSuffix for GraphId with invalid level: " +
                              std::to_string(graphid));
   }
 
   // get the level info
-  const auto& level = graphid.level() == TileHierarchy::GetTransitLevel().level
-                          ? TileHierarchy::GetTransitLevel()
-                          : TileHierarchy::levels()[graphid.level()];
+  const auto& level = tiles ? *tiles
+                            : (graphid.level() == TileHierarchy::GetTransitLevel().level
+                                   ? TileHierarchy::GetTransitLevel()
+                                   : TileHierarchy::levels()[graphid.level()]);
 
   // figure out how many digits in tile-id
   const auto max_id = level.tiles.ncolumns() * level.tiles.nrows() - 1;
@@ -465,11 +482,11 @@ GraphTile::FileSuffix(const GraphId& graphid, const std::string& fname_suffix, b
   for (uint32_t tile_id = graphid.tileid(); tile_id != 0; tile_id /= 10) {
     tile_id_str[ind--] = '0' + static_cast<char>(tile_id % 10);
     if ((tile_id_strlen - ind) % 4 == 0) {
-      tile_id_str[ind--] = separator;
+      ind--; // skip an additional character to leave space for separators
     }
   }
-  // add missing separators
-  for (size_t sep_ind = 0; sep_ind < ind; sep_ind += 4) {
+  // add separators
+  for (size_t sep_ind = 0; sep_ind < tile_id_strlen; sep_ind += 4) {
     tile_id_str[sep_ind] = separator;
   }
 
@@ -623,6 +640,41 @@ iterable_t<const DirectedEdge> GraphTile::GetDirectedEdges(const size_t idx) con
   return iterable_t<const DirectedEdge>{edge, nodeinfo.edge_count()};
 }
 
+iterable_t<const DirectedEdgeExt> GraphTile::GetDirectedEdgeExts(const NodeInfo* node) const {
+  if (node < nodes_ || node >= nodes_ + header_->nodecount()) {
+    throw std::logic_error(
+        std::string(__FILE__) + ":" + std::to_string(__LINE__) +
+        " GraphTile NodeInfo out of bounds: " + std::to_string(header_->graphid()));
+  }
+  const auto* edge_ext = ext_directededges_ + node->edge_index();
+  return iterable_t<const DirectedEdgeExt>{edge_ext, node->edge_count()};
+}
+
+iterable_t<const DirectedEdgeExt> GraphTile::GetDirectedEdgeExts(const GraphId& node) const {
+  if (node.Tile_Base() != header_->graphid() || node.id() >= header_->nodecount()) {
+    throw std::logic_error(
+        std::string(__FILE__) + ":" + std::to_string(__LINE__) +
+        " GraphTile NodeInfo index out of bounds: " + std::to_string(node.tileid()) + "," +
+        std::to_string(node.level()) + "," + std::to_string(node.id()) +
+        " nodecount= " + std::to_string(header_->nodecount()));
+  }
+  const auto* nodeinfo = nodes_ + node.id();
+  return GetDirectedEdgeExts(nodeinfo);
+}
+
+iterable_t<const DirectedEdgeExt> GraphTile::GetDirectedEdgeExts(const size_t idx) const {
+  if (idx >= header_->nodecount()) {
+    throw std::logic_error(
+        std::string(__FILE__) + ":" + std::to_string(__LINE__) +
+        " GraphTile NodeInfo index out of bounds 5: " + std::to_string(header_->graphid().tileid()) +
+        "," + std::to_string(header_->graphid().level()) + "," + std::to_string(idx) +
+        " nodecount= " + std::to_string(header_->nodecount()));
+  }
+  const auto& nodeinfo = nodes_[idx];
+  const auto* edge_ext = ext_directededge(nodeinfo.edge_index());
+  return iterable_t<const DirectedEdgeExt>{edge_ext, nodeinfo.edge_count()};
+}
+
 EdgeInfo GraphTile::edgeinfo(const DirectedEdge* edge) const {
   return EdgeInfo(edgeinfo_ + edge->edgeinfo_offset(), textlist_, textlist_size_);
 }
@@ -664,6 +716,17 @@ GraphTile::GetDirectedEdges(const uint32_t node_index, uint32_t& count, uint32_t
   return directededge(nodeinfo->edge_index());
 }
 
+// Get the directed edge extensions outbound from the specified node index.
+const DirectedEdgeExt* GraphTile::GetDirectedEdgeExts(const uint32_t node_index,
+                                                      uint32_t& count,
+                                                      uint32_t& edge_index) const {
+  const NodeInfo* nodeinfo = node(node_index);
+  count = nodeinfo->edge_count();
+  edge_index = nodeinfo->edge_index();
+  return ext_directededge(nodeinfo->edge_index());
+}
+
+// Convenience method to get the names for an edge
 std::vector<std::string> GraphTile::GetNames(const DirectedEdge* edge) const {
   return edgeinfo(edge).GetNames();
 }
@@ -699,8 +762,8 @@ std::string GraphTile::GetName(const uint32_t textlist_offset) const {
   }
 }
 
-// Convenience method to get the signs for an edge given the
-// directed edge index.
+// Convenience method to process the signs for an edge given the
+// directed edge or node index.
 std::vector<SignInfo> GraphTile::GetSigns(const uint32_t idx, bool signs_on_node) const {
   uint32_t count = header_->signcount();
   std::vector<SignInfo> signs;
@@ -733,8 +796,99 @@ std::vector<SignInfo> GraphTile::GetSigns(const uint32_t idx, bool signs_on_node
   // Add signs
   for (; found < count && signs_[found].index() == idx; ++found) {
     if (signs_[found].text_offset() < textlist_size_) {
-      // Skip tagged text strings (Future code is needed to handle tagged strings)
-      if (signs_[found].tagged()) {
+
+      std::string text = (textlist_ + signs_[found].text_offset());
+
+      // only add named signs when asking for signs at the node and
+      // only add edge signs when asking for signs at the edges.
+      // is_route_num_type indicates if this phonome is for a node or not; therefore,
+      // we only return a node phoneme when is_route_num_type and signs_on_node are both true and
+      // we only return an edge phoneme when is_route_num_type and signs_on_node are both false
+      if (((signs_[found].type() == Sign::Type::kJunctionName ||
+            (signs_[found].type() == Sign::Type::kPronunciation &&
+             signs_[found].is_route_num_type())) &&
+           signs_on_node) ||
+          (((signs_[found].type() != Sign::Type::kJunctionName &&
+             signs_[found].type() != Sign::Type::kPronunciation) ||
+            (signs_[found].type() == Sign::Type::kPronunciation &&
+             !signs_[found].is_route_num_type())) &&
+           !signs_on_node))
+        signs.emplace_back(signs_[found].type(), signs_[found].is_route_num_type(),
+                           signs_[found].tagged(), false, 0, 0, text);
+    } else {
+      throw std::runtime_error("GetSigns: offset exceeds size of text list");
+    }
+  }
+  if (signs.size() == 0) {
+    LOG_ERROR("No signs found for idx = " + std::to_string(idx));
+  }
+  return signs;
+}
+
+// Convenience method to get the signs for an edge given the
+// directed edge index.
+std::vector<SignInfo> GraphTile::GetSigns(
+    const uint32_t idx,
+    std::unordered_map<uint32_t, std::pair<uint8_t, std::string>>& index_pronunciation_map,
+    bool signs_on_node) const {
+  uint32_t count = header_->signcount();
+  std::vector<SignInfo> signs;
+  if (count == 0) {
+    return signs;
+  }
+  index_pronunciation_map.reserve(count);
+
+  // Signs are sorted by edge index.
+  // Binary search to find a sign with matching edge index.
+  int32_t low = 0;
+  int32_t high = count - 1;
+  int32_t mid;
+  int32_t found = count;
+  while (low <= high) {
+    mid = (low + high) / 2;
+    const auto& sign = signs_[mid];
+    // matching edge index
+    if (idx == sign.index()) {
+      found = mid;
+      high = mid - 1;
+    } // need a smaller index
+    else if (idx < sign.index()) {
+      high = mid - 1;
+    } // need a bigger index
+    else {
+      low = mid + 1;
+    }
+  }
+
+  // Add signs
+  for (; found < count && signs_[found].index() == idx; ++found) {
+    if (signs_[found].text_offset() < textlist_size_) {
+
+      const auto* text = (textlist_ + signs_[found].text_offset());
+      if (signs_[found].tagged() && signs_[found].type() == Sign::Type::kPronunciation) {
+
+        // is_route_num_type indicates if this phonome is for a node or not
+        if ((signs_[found].is_route_num_type() && signs_on_node) ||
+            (!signs_[found].is_route_num_type() && !signs_on_node)) {
+          size_t pos = 0;
+          while (pos < strlen(text)) {
+            const auto header = midgard::unaligned_read<linguistic_text_header_t>(text + pos);
+            pos += 3;
+
+            auto iter = index_pronunciation_map.insert(
+                std::make_pair(header.name_index_,
+                               std::make_pair(header.phonetic_alphabet_,
+                                              std::string((text + pos), header.length_))));
+            if (!iter.second) {
+              if (header.phonetic_alphabet_ > iter.first->second.first) {
+                iter.first->second = std::make_pair(header.phonetic_alphabet_,
+                                                    std::string((text + pos), header.length_));
+              }
+            }
+
+            pos += header.length_;
+          }
+        }
         continue;
       }
 
@@ -742,8 +896,8 @@ std::vector<SignInfo> GraphTile::GetSigns(const uint32_t idx, bool signs_on_node
       // only add edge signs when asking for signs at the edges.
       if ((signs_[found].type() == Sign::Type::kJunctionName && signs_on_node) ||
           (signs_[found].type() != Sign::Type::kJunctionName && !signs_on_node))
-        signs.emplace_back(signs_[found].type(), signs_[found].route_num_type(),
-                           (textlist_ + signs_[found].text_offset()));
+        signs.emplace_back(signs_[found].type(), signs_[found].is_route_num_type(),
+                           signs_[found].tagged(), false, 0, 0, text);
     } else {
       throw std::runtime_error("GetSigns: offset exceeds size of text list");
     }

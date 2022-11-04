@@ -26,7 +26,7 @@ TEST(TimeTracking, make) {
   baldr::GraphReader reader(map.config.get_child("mjolnir"));
 
   // this is what the default should be, with constrained second of day
-  baldr::TimeInfo basic_ti{false, 0, 0, baldr::kConstrainedFlowSecondOfDay};
+  baldr::TimeInfo basic_ti{false, 0, 0, baldr::kInvalidSecondsOfWeek};
 
   // once without tz cache and once with
   for (auto* cache : std::vector<baldr::DateTime::tz_sys_info_cache_t*>{
@@ -42,7 +42,7 @@ TEST(TimeTracking, make) {
     // no time
     auto ti = baldr::TimeInfo::make(location, reader, cache);
     ASSERT_EQ(ti, basic_ti);
-    ASSERT_FALSE(location.has_date_time());
+    ASSERT_TRUE(location.date_time().empty());
 
     // bad timezone defaults to UTC
     location.set_date_time("2020-04-01T12:34");
