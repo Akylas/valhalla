@@ -14,7 +14,8 @@
 namespace valhalla {
 namespace skadi {
 
-struct cache_t;
+// CARTOHACK
+//struct cache_t;
 class tile_data;
 
 class sample {
@@ -91,8 +92,9 @@ protected:
    */
   bool store(const std::string& path, const std::vector<char>& raw_data);
 
-  friend cache_t;
-  std::unique_ptr<cache_t> cache_;
+  // CARTOHACK
+//  friend cache_t;
+//  std::unique_ptr<cache_t> cache_;
 
 private:
   /**

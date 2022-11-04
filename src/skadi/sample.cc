@@ -12,7 +12,8 @@
 #include <unordered_map>
 
 #include <boost/optional.hpp>
-#include <lz4frame.h>
+// CARTOHACK
+//#include <lz4frame.h>
 #include <sys/stat.h>
 
 #include "baldr/compression_utils.h"
@@ -165,7 +166,7 @@ public:
 
   static boost::optional<std::pair<uint16_t, format_t>> parse_hgt_name(const std::string& name) {
     std::smatch m;
-    std::regex e(".*/([NS])([0-9]{2})([WE])([0-9]{3})\\.hgt(\\.(gz|lz4))?$");
+    std::regex e(".*([NS])([0-9]{2})([WE])([0-9]{3})\\.hgt(\\.(gz|lz4))?$");
     if (std::regex_search(name, m, e)) {
       // enum class format_t{ UNKNOWN = 0, GZIP = 1, RAW = 3, LZ4 = 4 };
       format_t fmt;
@@ -395,7 +396,7 @@ tile_data cache_t::source(uint16_t index) {
   mutex.unlock();
   return rv;
 }
-*/
+
 
 tile_data::tile_data(cache_t* c, uint16_t index, bool reusable, const int16_t* data)
     : c(c), data(data), index(index), reusable(reusable) {
@@ -421,6 +422,8 @@ tile_data& tile_data::operator=(const tile_data& other) {
     c->increment_usages(index);
   return *this;
 }
+
+*/
 
 sample::sample(const boost::property_tree::ptree& pt)
     : sample(pt.get<std::string>("additional_data.elevation", "")) {
@@ -449,40 +452,13 @@ sample::~sample() {
 }
 
 template <class coord_t> double sample::get(const coord_t& coord, tile_data& tile) {
-  // check the cache and load
-  auto lon = std::floor(coord.first);
-  auto lat = std::floor(coord.second);
-  auto index = static_cast<uint16_t>(lat + 90) * 360 + static_cast<uint16_t>(lon + 180);
-
-  // the caller can pass a cached tile, so we only fetch one if its not the one they already have
-  if (index != tile.get_index()) {
-    {
-      std::lock_guard<std::mutex> _(cache_lck);
-      tile = cache_->source(index);
-    }
-    if (!tile) {
-      if (!fetch(index))
-        return get_no_data_value();
-
-      if (!(tile = cache_->source(index)))
-        return get_no_data_value();
-    }
-  }
-
-  // figure out what row and column we need from the array of data
-  // NOTE: data is arranged from upper left to bottom right, so y is flipped
-
-  // fractional pixel
-  double u = (coord.first - lon) * (HGT_DIM - 1);
-  double v = (1.0 - (coord.second - lat)) * (HGT_DIM - 1);
-
-  return tile.get(u, v);
-*/
+  // CARTOHACK
+  return NO_DATA_VALUE;
 }
 
 template <class coord_t> double sample::get(const coord_t& coord) {
-  tile_data tile;
-  return get(coord, tile);
+  // CARTOHACK
+  return NO_DATA_VALUE;
 }
 
 template <class coords_t> std::vector<double> sample::get_all(const coords_t& coords) {
@@ -500,6 +476,8 @@ template <class coords_t> std::vector<double> sample::get_all(const coords_t& co
 }
 
 bool sample::store(const std::string& elev, const std::vector<char>& raw_data) {
+  // CARTOHACK
+/*
   // data_source never changes so we do not lock it. it is set only in sample constructor
   auto fpath = cache_->data_source + elev;
   if (filesystem::exists(fpath))
@@ -519,6 +497,8 @@ bool sample::store(const std::string& elev, const std::vector<char>& raw_data) {
 
   std::lock_guard<std::mutex> _(cache_lck);
   return cache_->insert(data->first, fpath, data->second);
+  */
+return false;
 }
 
 bool sample::fetch(uint16_t index) {
@@ -615,7 +595,8 @@ std::string get_hgt_file_name(uint16_t index) {
 
   return name;
 }
-
+// CARTOHACK
+/*
 // we don't need lock as this method is called in constructor only
 void sample::cache_initialisation(const std::string& data_source) {
   cache_ = std::make_unique<cache_t>();
@@ -646,7 +627,7 @@ void sample::cache_initialisation(const std::string& data_source) {
     }
   }
 }
-
+*/
 double get_no_data_value() {
   return NO_DATA_VALUE;
 }

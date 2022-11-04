@@ -1,6 +1,10 @@
 #include "baldr/tilehierarchy.h"
 // CARTOHACK
 //#include "config.h"
+#define VALHALLA_STRINGIZE_NX(A) #A
+#define VALHALLA_STRINGIZE(A) VALHALLA_STRINGIZE_NX(A)
+#define VALHALLA_VERSION VALHALLA_STRINGIZE(VALHALLA_VERSION_MAJOR) "." VALHALLA_STRINGIZE(VALHALLA_VERSION_MINOR) "." VALHALLA_STRINGIZE(VALHALLA_VERSION_PATCH)
+
 #include "filesystem.h"
 #include "loki/worker.h"
 #include "proto/status.pb.h"
