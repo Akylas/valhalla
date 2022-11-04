@@ -91,6 +91,14 @@ GraphTileBuilder::GraphTileBuilder(const std::string& tile_dir,
   std::copy(directededges_, directededges_ + n, std::back_inserter(directededges_builder_));
 
   // Add extended directededge attributes (if available)
+  if (header_->has_ext_directededge()) {
+    // Copy extended directed edges to the builder list
+    // NOTE: directed edge and directed edge extensions are assumed to have the
+    // same length
+    directededges_ext_builder_.reserve(n);
+    std::copy(ext_directededges_, ext_directededges_ + n,
+              std::back_inserter(directededges_ext_builder_));
+  }
 
   // Create access restriction list
   for (uint32_t i = 0; i < header_->access_restriction_count(); i++) {
@@ -459,6 +467,11 @@ std::vector<DirectedEdge>& GraphTileBuilder::directededges() {
   return directededges_builder_;
 }
 
+// Gets the current list of directed edge extension (builders).
+std::vector<DirectedEdgeExt>& GraphTileBuilder::directededges_ext() {
+  return directededges_ext_builder_;
+}
+
 // Add a transit departure.
 void GraphTileBuilder::AddTransitDeparture(const TransitDeparture& departure) {
   departure_builder_.emplace_back(std::move(departure));
@@ -511,7 +524,8 @@ void GraphTileBuilder::AddSigns(const uint32_t idx,
           std::string updated_pronunciation;
 
           while (pos < strlen(p)) {
-            linguistic_text_header_t header = *reinterpret_cast<linguistic_text_header_t*>(p + pos);
+            linguistic_text_header_t header =
+                midgard::unaligned_read<linguistic_text_header_t>(p + pos);
             pos += 3;
             header.name_index_ = i;
             updated_pronunciation.append(std::string(reinterpret_cast<const char*>(&header), 3) +
@@ -916,6 +930,14 @@ DirectedEdge& GraphTileBuilder::directededge(const size_t idx) {
   throw std::runtime_error("GraphTile DirectedEdge id out of bounds");
 }
 
+// Gets a non-const directed edge extension from existing tile data.
+DirectedEdgeExt& GraphTileBuilder::directededge_ext(const size_t idx) {
+  if (idx < header_->directededgecount()) {
+    return ext_directededges_[idx];
+  }
+  throw std::runtime_error("GraphTile DirectedEdgeExt id out of bounds");
+}
+
 // Gets a pointer to directed edges within the list being built.
 const DirectedEdge* GraphTileBuilder::directededges(const size_t idx) const {
   if (idx < header_->directededgecount()) {
@@ -924,12 +946,28 @@ const DirectedEdge* GraphTileBuilder::directededges(const size_t idx) const {
   throw std::runtime_error("GraphTile DirectedEdge id out of bounds");
 }
 
+// Gets a pointer to directed edge extensions within the list being built.
+const DirectedEdgeExt* GraphTileBuilder::directededges_ext(const size_t idx) const {
+  if (idx < header_->directededgecount()) {
+    return &directededges_ext_builder_[idx];
+  }
+  throw std::runtime_error("GraphTile DirectedEdgeExt id out of bounds");
+}
+
 // Get the directed edge builder at the specified index.
 DirectedEdge& GraphTileBuilder::directededge_builder(const size_t idx) {
   if (idx < header_->directededgecount()) {
     return directededges_builder_[idx];
   }
   throw std::runtime_error("GraphTile DirectedEdge id out of bounds");
+}
+
+// Get the directed edge extension builder at the specified index.
+DirectedEdgeExt& GraphTileBuilder::directededge_ext_builder(const size_t idx) {
+  if (idx < header_->directededgecount()) {
+    return directededges_ext_builder_[idx];
+  }
+  throw std::runtime_error("GraphTile DirectedEdgeExt id out of bounds");
 }
 
 // Gets a non-const access restriction from existing tile data.

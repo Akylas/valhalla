@@ -129,9 +129,15 @@ json::MapPtr serialize(const Api& request,
   json->emplace("targets", json::array({locations(options.targets())}));
   json->emplace("sources", json::array({locations(options.sources())}));
 
-  if (options.has_id()) {
+  if (options.has_id_case()) {
     json->emplace("id", options.id());
   }
+
+  // add warnings to json response
+  if (request.info().warnings_size() >= 1) {
+    json->emplace("warnings", valhalla::tyr::serializeWarnings(request));
+  }
+
   return json;
 }
 } // namespace valhalla_serializers

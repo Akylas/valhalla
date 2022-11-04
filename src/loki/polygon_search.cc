@@ -47,7 +47,7 @@ void correct_ring(ring_bg_t& ring) {
   }
 }
 
-ring_bg_t PBFToRing(const valhalla::Options::Ring& ring_pbf) {
+ring_bg_t PBFToRing(const valhalla::Ring& ring_pbf) {
   ring_bg_t new_ring;
   for (const auto& coord : ring_pbf.coords()) {
     new_ring.push_back({coord.lng(), coord.lat()});
@@ -95,7 +95,7 @@ namespace valhalla {
 namespace loki {
 
 std::unordered_set<vb::GraphId>
-edges_in_rings(const google::protobuf::RepeatedPtrField<valhalla::Options_Ring>& rings_pbf,
+edges_in_rings(const google::protobuf::RepeatedPtrField<valhalla::Ring>& rings_pbf,
                baldr::GraphReader& reader,
                const std::shared_ptr<sif::DynamicCost>& costing,
                float max_length) {
@@ -109,7 +109,7 @@ edges_in_rings(const google::protobuf::RepeatedPtrField<valhalla::Options_Ring>&
     rings_length += bg::perimeter(ring_bg, Haversine());
   }
   if (rings_length > max_length) {
-    throw valhalla_exception_t(167, std::to_string(max_length));
+    throw valhalla_exception_t(167, std::to_string(static_cast<size_t>(max_length)) + " meters");
   }
 
   // Get the lowest level and tiles

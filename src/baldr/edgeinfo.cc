@@ -116,7 +116,7 @@ std::vector<std::string> EdgeInfo::GetTaggedValues(bool only_pronunciations) con
 
           size_t pos = 1;
           while (pos < strlen(name)) {
-            const auto& header = *reinterpret_cast<const linguistic_text_header_t*>(name + pos);
+            const auto header = midgard::unaligned_read<linguistic_text_header_t>(name + pos);
             pos += 3;
             names.emplace_back((std::string(reinterpret_cast<const char*>(&header), 3) +
                                 std::string((name + pos), header.length_)));
@@ -219,7 +219,7 @@ std::unordered_map<uint8_t, std::pair<uint8_t, std::string>> EdgeInfo::GetPronun
         if (tv == baldr::TaggedValue::kPronunciation) {
           size_t pos = 1;
           while (pos < strlen(name)) {
-            const auto& header = *reinterpret_cast<const linguistic_text_header_t*>(name + pos);
+            const auto header = midgard::unaligned_read<linguistic_text_header_t>(name + pos);
             pos += 3;
             std::unordered_map<uint8_t, std::pair<uint8_t, std::string>>::iterator iter =
                 index_pronunciation_map.find(header.name_index_);
@@ -290,14 +290,40 @@ int8_t EdgeInfo::layer() const {
   return static_cast<int8_t>(value.front());
 }
 
+std::string EdgeInfo::level() const {
+  const auto& tags = GetTags();
+  auto itr = tags.find(TaggedValue::kLevel);
+  if (itr == tags.end()) {
+    return "";
+  }
+  const std::string& value = itr->second;
+  return value;
+}
+
+std::string EdgeInfo::level_ref() const {
+  const auto& tags = GetTags();
+  auto itr = tags.find(TaggedValue::kLevelRef);
+  if (itr == tags.end()) {
+    return "";
+  }
+  const std::string& value = itr->second;
+  return value;
+}
+
 json::MapPtr EdgeInfo::json() const {
   json::MapPtr edge_info = json::map({
       {"way_id", static_cast<uint64_t>(wayid())},
-      {"mean_elevation", static_cast<uint64_t>(mean_elevation())},
       {"bike_network", bike_network_json(bike_network())},
       {"names", names_json(GetNames())},
       {"shape", midgard::encode(shape())},
   });
+  // add the mean_elevation depending on its validity
+  const auto elev = mean_elevation();
+  if (elev == kNoElevationData) {
+    edge_info->emplace("mean_elevation", nullptr);
+  } else {
+    edge_info->emplace("mean_elevation", static_cast<int64_t>(elev));
+  }
 
   if (speed_limit() == kUnlimitedSpeedLimit) {
     edge_info->emplace("speed_limit", std::string("unlimited"));

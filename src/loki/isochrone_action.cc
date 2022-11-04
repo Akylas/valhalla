@@ -13,14 +13,15 @@ midgard::PointLL to_ll(const valhalla::Location& l) {
 }
 
 void check_distance(const google::protobuf::RepeatedPtrField<valhalla::Location>& locations,
-                    float matrix_max_distance) {
+                    float max_iso_distance) {
   // see if any locations pairs are unreachable or too far apart
   for (auto source = locations.begin(); source != locations.end() - 1; ++source) {
     for (auto target = source + 1; target != locations.end(); ++target) {
       // check if distance between latlngs exceed max distance limit
       auto path_distance = to_ll(*source).Distance(to_ll(*target));
-      if (path_distance > matrix_max_distance) {
-        throw valhalla_exception_t{154};
+      if (path_distance > max_iso_distance) {
+        throw valhalla_exception_t{154,
+                                   std::to_string(static_cast<size_t>(max_iso_distance)) + " meters"};
       };
     }
   }
@@ -51,9 +52,9 @@ void loki_worker_t::init_isochrones(Api& request) {
 
   // check the contour metrics
   for (auto& contour : options.contours()) {
-    if (contour.has_time() && contour.time() > max_contour_min)
+    if (contour.has_time_case() && contour.time() > max_contour_min)
       throw valhalla_exception_t{151, std::to_string(max_contour_min)};
-    if (contour.has_distance() && contour.distance() > max_contour_km)
+    if (contour.has_distance_case() && contour.distance() > max_contour_km)
       throw valhalla_exception_t{166, std::to_string(max_contour_km)};
   }
 

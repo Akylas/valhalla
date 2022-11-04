@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -8,6 +9,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -467,27 +469,6 @@ template <class coord_t>
 bool intersect(const coord_t& u, const coord_t& v, const coord_t& a, const coord_t& b, coord_t& i);
 
 /**
- * Return the intercept of the line passing through uv with the horizontal line defined by y
- * @param u  first point on line
- * @param v  second point on line
- * @param y  y component of horizontal line
- * @return x component (or NaN if parallel) of the intercept of uv with the horizontal line
- */
-template <class coord_t>
-typename coord_t::first_type
-y_intercept(const coord_t& u, const coord_t& v, const typename coord_t::second_type y = 0);
-/**
- * Return the intercept of the line passing through uv with the vertical line defined by x
- * @param u  first point on line
- * @param v  second point on line
- * @param x  x component of vertical line
- * @return y component (or NaN if parallel) of the intercept of uv with the vertical line
- */
-template <class coord_t>
-typename coord_t::first_type
-x_intercept(const coord_t& u, const coord_t& v, const typename coord_t::second_type x = 0);
-
-/**
  * Compute the area of a polygon. If your polygon is not twisted or self intersecting
  * this will return a positive value for counterclockwise wound polygons and negative otherwise.
  * Works with rings where the polygons first and last points are the same or not
@@ -707,6 +688,14 @@ template <typename T> struct Finally {
 template <typename T> Finally<T> make_finally(T t) {
   return Finally<T>{t};
 };
+
+template <typename T>
+typename std::enable_if<std::is_trivially_copy_assignable<T>::value, T>::type
+unaligned_read(const void* ptr) {
+  T r;
+  std::memcpy(&r, ptr, sizeof(T));
+  return r;
+}
 
 } // namespace midgard
 } // namespace valhalla

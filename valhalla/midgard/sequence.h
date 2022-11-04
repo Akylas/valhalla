@@ -154,7 +154,7 @@ public:
 
   // create a new file to map with a given size
   void create(const std::string& new_file_name, size_t new_count, int advice = POSIX_MADV_NORMAL) {
-    auto target_size = new_count * sizeof(T);
+    decltype(stat::st_size) target_size = new_count * sizeof(T);
     struct stat s;
     if (stat(new_file_name.c_str(), &s) || s.st_size != target_size) {
       // open, create and truncate the file
@@ -681,7 +681,6 @@ struct tar {
       throw std::runtime_error(tar_file + "(stat): invalid archive size " +
                                std::to_string(s.st_size) + " with header size " +
                                std::to_string(sizeof(header_t)));
-      return;
     }
 
     // map the file
