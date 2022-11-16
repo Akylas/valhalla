@@ -21,7 +21,8 @@
 #include "midgard/logging.h"
 #include "midgard/pointll.h"
 #include "midgard/sequence.h"
-#include "valhalla/baldr/curl_tilegetter.h"
+// CARTOHACK
+//#include "valhalla/baldr/curl_tilegetter.h"
 
 namespace {
 // srtmgl1 holds 1x1 degree tiles but oversamples the egde of the tile
@@ -427,6 +428,8 @@ tile_data& tile_data::operator=(const tile_data& other) {
 
 sample::sample(const boost::property_tree::ptree& pt)
     : sample(pt.get<std::string>("additional_data.elevation", "")) {
+// CARTOHACK
+/*
   url_ = pt.get<std::string>("additional_data.elevation_url", "");
 
   auto max_concurrent_users = pt.get<size_t>("mjolnir.max_concurrent_reader_users", 1);
@@ -437,6 +440,7 @@ sample::sample(const boost::property_tree::ptree& pt)
 
   // this line used only for testing, for more details check elevation_builder.cc
   remote_path_ = pt.get<std::string>("additional_data.elevation_dir", "");
+*/
 }
 
 sample::sample(const std::string& data_source) {
@@ -502,6 +506,9 @@ return false;
 }
 
 bool sample::fetch(uint16_t index) {
+  // CARTOHACK
+  return false;
+  /*
   if (url_.empty() || !remote_loader_)
     return false;
 
@@ -525,6 +532,7 @@ bool sample::fetch(uint16_t index) {
 
   LOG_INFO("Data loaded from remote server address: " + uri);
   return true;
+  */
 }
 
 template <class coord_t> uint16_t sample::get_tile_index(const coord_t& coord) {
