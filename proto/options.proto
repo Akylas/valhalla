@@ -309,6 +309,10 @@ message Costing {
     }
     uint32 fixed_speed = 80;
     uint32 axle_count = 81;
+
+    oneof has_non_network_penalty {
+      float non_network_penalty = 82;
+    }
   }
 
   oneof has_options {
