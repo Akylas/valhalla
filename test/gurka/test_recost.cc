@@ -366,14 +366,14 @@ TEST(recosting, all_algorithms) {
 
         // find the percentage of the edges used
         float src_pct = 0;
-        for (const auto& edge : api.options().locations(0).path_edges()) {
+        for (const auto& edge : api.options().locations(0).correlation().edges()) {
           if (leg.node(0).edge().id() == edge.graph_id()) {
             src_pct = edge.percent_along();
             break;
           }
         }
         float tgt_pct = 1;
-        for (const auto& edge : api.options().locations(1).path_edges()) {
+        for (const auto& edge : api.options().locations(1).correlation().edges()) {
           if (std::next(leg.node().rbegin())->edge().id() == edge.graph_id()) {
             tgt_pct = edge.percent_along();
             break;
@@ -442,12 +442,13 @@ TEST(recosting, throwing) {
   EXPECT_THROW(sif::recost_forward(*reader, *costing, edge_cb, label_cb, -90, 476), std::logic_error);
 
   // this edge id is valid but doesnt exist
-  EXPECT_THROW(sif::recost_forward(*reader, *costing, []() { return baldr::GraphId{123456789}; },
-                                   label_cb),
+  EXPECT_THROW(sif::recost_forward(
+                   *reader, *costing, []() { return baldr::GraphId{123456789}; }, label_cb),
                std::runtime_error);
 
   // this edge id is not valid
-  sif::recost_forward(*reader, *costing, []() { return baldr::GraphId{}; }, label_cb);
+  sif::recost_forward(
+      *reader, *costing, []() { return baldr::GraphId{}; }, label_cb);
   EXPECT_EQ(called, false);
 
   // this path isnt possible with a car because the second edge doesnt have auto access

@@ -88,6 +88,12 @@ public:
   std::vector<DirectedEdge>& directededges();
 
   /**
+   * Gets the current list of directed edge extension (builders).
+   * @return  Returns the directed edge extension builders.
+   */
+  std::vector<DirectedEdgeExt>& directededges_ext();
+
+  /**
    * Gets the current list of node transition (builders).
    * @return  Returns a reference to node transition builders.
    */
@@ -130,6 +136,15 @@ public:
    * @param  restrictions Access restrictions
    */
   void AddAccessRestrictions(const std::vector<AccessRestriction>& restrictions);
+
+  /**
+   * Add sign information.
+   * @param  idx  Directed edge index.
+   * @param  signs  Sign information.
+   */
+  void AddSigns(const uint32_t idx,
+                const std::vector<baldr::SignInfo>& signs,
+                const std::vector<std::string>& pronunciations);
 
   /**
    * Add sign information.
@@ -180,26 +195,27 @@ public:
   /**
    * Add the edge info to the tile.
    *
-   * @param  edgeindex  The index of the edge - used with nodea and nodeb to
-   *                    form tuple that uniquely identifies the edge info since
-   *                    there are two directed edges per edge info.
-   * @param  nodea  One of two nodes - used with edgeindex and nodeb to
-   *                form tuple that uniquely identifies the edge info since
-   *                there are two directed edges per edge info.
-   * @param  nodeb  One of two nodes - used with edgeindex and nodea to
-   *                form tuple that uniquely identifies the edge info since
-   *                there are two directed edges per edge info.
-   * @param  wayid  The target edge is part of this the way id.
-   * @param  elev   Mean elevation.
-   * @param  bn     Bike network.
-   * @param  spd    Speed limit. [kph]
-   * @param  lls    The shape of the target edge.
-   * @param  names  The names of the target edge.
-   * @param  types  Bits indicating if the name is a ref vs a name.
-   * @param  added  Set to true if the target edge was newly added to the list,
-   *                set to false if the target edge was already in the list.
-   * @param  diff_names Indicates the opposing direction has different names.
-   *                    If true a new EdgeInfo is always added.
+   * @param  edgeindex      The index of the edge - used with nodea and nodeb to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  nodea          One of two nodes - used with edgeindex and nodeb to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  nodeb          One of two nodes - used with edgeindex and nodea to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  wayid          The target edge is part of this the way id.
+   * @param  elev           Mean elevation.
+   * @param  bn             Bike network.
+   * @param  spd            Speed limit. [kph]
+   * @param  lls            The shape of the target edge.
+   * @param  names          The names of the target edge.
+   * @param  pronunciations The pronunciations of the target edge.
+   * @param  types          Bits indicating if the name is a ref vs a name.
+   * @param  added          Set to true if the target edge was newly added to the list,
+   *                        set to false if the target edge was already in the list.
+   * @param  diff_names     Indicates the opposing direction has different names.
+   *                        If true a new EdgeInfo is always added.
    * @return  The edge info offset that will be stored in the directed edge.
    */
   template <class shape_container_t>
@@ -213,33 +229,35 @@ public:
                        const shape_container_t& lls,
                        const std::vector<std::string>& names,
                        const std::vector<std::string>& tagged_values,
+                       const std::vector<std::string>& pronunciations,
                        const uint16_t types,
                        bool& added,
                        bool diff_names = false);
 
   /**
    * Add the edge info to the tile. This method accepts an encoded shape string.
-   * @param  edgeindex    The index of the edge - used with nodea and nodeb to
-   *                      form tuple that uniquely identifies the edge info since
-   *                      there are two directed edges per edge info.
-   * @param  nodea        One of two nodes - used with edgeindex and nodeb to
-   *                      form tuple that uniquely identifies the edge info since
-   *                      there are two directed edges per edge info.
-   * @param  nodeb        One of two nodes - used with edgeindex and nodea to
-   *                      form tuple that uniquely identifies the edge info since
-   *                      there are two directed edges per edge info.
-   * @param  wayid        The target edge is part of this the way id.
-   * @param  elev         Mean elevation.
-   * @param  bn           Bike network.
-   * @param  spd          Speed limit.
-   * @param  llstr        The shape of the target edge as an encoded string.
-   * @param  names        The names of the target edge.
-   * @param  tagged_values The tagged names of the target edge.
-   * @param  types        Bits indicating if the name is a ref vs a name.
-   * @param  added        Set to true if the target edge was newly added to the list,
-   *                      set to false if the target edge was already in the list.
-   * @param  diff_names   Indicates the opposing direction has different names.
-   *                      If true a new EdgeInfo is always added.
+   * @param  edgeindex      The index of the edge - used with nodea and nodeb to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  nodea          One of two nodes - used with edgeindex and nodeb to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  nodeb          One of two nodes - used with edgeindex and nodea to
+   *                        form tuple that uniquely identifies the edge info since
+   *                        there are two directed edges per edge info.
+   * @param  wayid          The target edge is part of this the way id.
+   * @param  elev           Mean elevation.
+   * @param  bn             Bike network.
+   * @param  spd            Speed limit.
+   * @param  llstr          The shape of the target edge as an encoded string.
+   * @param  names          The names of the target edge.
+   * @param  tagged_values   The tagged names of the target edge.
+   * @param  pronunciations The pronunciations of the target edge.
+   * @param  types          Bits indicating if the name is a ref vs a name.
+   * @param  added          Set to true if the target edge was newly added to the list,
+   *                        set to false if the target edge was already in the list.
+   * @param  diff_names     Indicates the opposing direction has different names.
+   *                        If true a new EdgeInfo is always added.
    * @return  The edge info offset that will be stored in the directed edge.
    */
   uint32_t AddEdgeInfo(const uint32_t edgeindex,
@@ -252,6 +270,7 @@ public:
                        const std::string& llstr,
                        const std::vector<std::string>& names,
                        const std::vector<std::string>& tagged_values,
+                       const std::vector<std::string>& pronunciations,
                        const uint16_t types,
                        bool& added,
                        bool diff_names = false);
@@ -321,6 +340,13 @@ public:
   DirectedEdge& directededge(const size_t idx);
 
   /**
+   * Gets a directed edge extension from existing tile data.
+   * @param  idx  Index of the directed edge extension within the tile.
+   * @return  Returns a reference to the directed edge extension.
+   */
+  DirectedEdgeExt& directededge_ext(const size_t idx);
+
+  /**
    * Gets a pointer to directed edges within the list being built.
    * @param  idx  Index of the directed edge within the tile.
    * @return  Returns a pointer to the directed edge builder (allows
@@ -329,14 +355,26 @@ public:
   const DirectedEdge* directededges(const size_t idx) const;
 
   /**
+   * Gets a pointer to directed edge extensions within the list being built.
+   * @param  idx  Index of the directed edge within the tile.
+   * @return  Returns a pointer to the directed edge extension builder (allows
+   *          accessing all directed edge extensions from a node).
+   */
+  const DirectedEdgeExt* directededges_ext(const size_t idx) const;
+
+  /**
    * Get the directed edge builder at the specified index.
    * @param  idx  Index of the directed edge builder.
    * @return  Returns a reference to the directed edge builder.
    */
   DirectedEdge& directededge_builder(const size_t idx);
 
-  // TODO - add access method to directededge_ext_builder if extended directed edge
-  // attributes are needed.
+  /**
+   * Get the directed edge extension builder at the specified index.
+   * @param  idx  Index of the directed edge extension builder.
+   * @return  Returns a reference to the directed edge extension builder.
+   */
+  DirectedEdgeExt& directededge_ext_builder(const size_t idx);
 
   /**
    * Gets a non-const access restriction from existing tile data.
