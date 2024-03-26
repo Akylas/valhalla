@@ -307,7 +307,6 @@ find_shortest_path(baldr::GraphReader& reader,
                    const float max_time);
 
 // Route path iterator. Methods to assist recovering route paths from Labels.
-// CARTOHACK
 class RoutePathIterator {
 public:
   using iterator_category = std::forward_iterator_tag;

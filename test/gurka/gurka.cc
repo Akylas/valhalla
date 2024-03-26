@@ -244,7 +244,8 @@ inline void build_pbf(const nodelayout& node_locations,
                       const nodes& nodes,
                       const relations& relations,
                       const std::string& filename,
-                      const uint64_t initial_osm_id) {
+                      const uint64_t initial_osm_id,
+                      const bool strict) {
 
   const size_t initial_buffer_size = 10000;
   osmium::memory::Buffer buffer{initial_buffer_size, osmium::memory::Buffer::auto_grow::yes};
@@ -269,7 +270,7 @@ inline void build_pbf(const nodelayout& node_locations,
   }
 
   for (auto& used_node : used_nodes) {
-    if (node_locations.count(used_node) == 0) {
+    if (node_locations.count(used_node) == 0 && strict) {
       throw std::runtime_error("Node " + used_node + " was referred to but was not in the ASCII map");
     }
   }
@@ -344,7 +345,7 @@ inline void build_pbf(const nodelayout& node_locations,
         members.push_back({osmium::item_type::node, static_cast<int64_t>(node_osm_id_map[member.ref]),
                            member.role.c_str()});
       } else {
-        if (way_osm_id_map.count(member.ref) == 0) {
+        if (way_osm_id_map.count(member.ref) == 0 && strict) {
           throw std::runtime_error("Relation member refers to an undefined way " + member.ref);
         }
         members.push_back({osmium::item_type::way, static_cast<int64_t>(way_osm_id_map[member.ref]),
@@ -435,17 +436,6 @@ std::vector<std::vector<std::string>> get_paths(const valhalla::Api& result) {
 /**
  * Given a node layout, set of ways, node properties and relations, generates an OSM PBF file,
  * and builds a set of Valhalla tiles for it.
- *
- * @param layout the locations of all the nodes
- * @param ways the way definitions (which nodes are connected, and their properties
- * @param nodes properties on any of the defined nodes
- * @param relations OSM relations that related nodes and ways together
- * @param workdir where to build the PBF and the tiles
- * @param config_options optional key value pairs where the key is ptree style dom traversal and
- *        the value is the value to put into the config. You can do things like add timezones database
- *        path
- * @return a map object that contains the Valhalla config (to pass to GraphReader) and node layout
- *         (for converting node names to coordinates)
  */
 map buildtiles(const nodelayout& layout,
                const ways& ways,
@@ -453,10 +443,18 @@ map buildtiles(const nodelayout& layout,
                const relations& relations,
                const std::string& workdir,
                const std::unordered_map<std::string, std::string>& config_options) {
+  auto config = test::make_config(workdir, config_options);
+  return buildtiles(layout, ways, nodes, relations, config);
+}
 
-  map result;
-  result.config = test::make_config(workdir, config_options);
-  result.nodes = layout;
+map buildtiles(const nodelayout& layout,
+               const ways& ways,
+               const nodes& nodes,
+               const relations& relations,
+               const boost::property_tree::ptree& config) {
+
+  map result{config, layout};
+  auto workdir = config.get<std::string>("mjolnir.tile_dir");
 
   // Sanity check so that we don't blow away / by mistake
   if (workdir == "/") {
@@ -513,7 +511,9 @@ findEdge(valhalla::baldr::GraphReader& reader,
       const auto* forward_directed_edge = tile->directededge(i);
       // Now, see if the endnode for this edge is our end_node
       auto de_endnode = forward_directed_edge->endnode();
-      auto de_endnode_coordinates = tile->get_node_ll(de_endnode);
+      graph_tile_ptr reverse_tile = tile;
+      auto de_endnode_coordinates =
+          reader.GetGraphTile(de_endnode, reverse_tile)->get_node_ll(de_endnode);
       const auto threshold = 0.00001; // Degrees.  About 1m at the equator
       if (std::abs(de_endnode_coordinates.lng() - end_node_coordinates.lng()) < threshold &&
           std::abs(de_endnode_coordinates.lat() - end_node_coordinates.lat()) < threshold) {
@@ -522,7 +522,6 @@ findEdge(valhalla::baldr::GraphReader& reader,
           if (name == way_name) {
             auto forward_edge_id = tile_id;
             forward_edge_id.set_id(i);
-            graph_tile_ptr reverse_tile = nullptr;
             GraphId reverse_edge_id = reader.GetOpposingEdgeId(forward_edge_id, reverse_tile);
             auto* reverse_directed_edge = reverse_tile->directededge(reverse_edge_id.id());
             return std::make_tuple(forward_edge_id, forward_directed_edge, reverse_edge_id,
