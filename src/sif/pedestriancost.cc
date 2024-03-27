@@ -58,6 +58,7 @@ constexpr float kDefaultAlleyFactor = 2.0f;        // Avoid alleys
 constexpr float kDefaultDrivewayFactor = 5.0f;     // Avoid driveways
 constexpr float kDefaultUseFerry = 1.0f;
 constexpr float kDefaultUseLivingStreets = 0.6f; // Factor between 0 and 1
+constexpr float kDefaultUseRoad = 0.25f;          // Factor between 0 and 1
 
 // Maximum distance at the beginning or end of a multimodal route
 // that you are willing to travel for this mode.  In this case,
@@ -121,6 +122,22 @@ constexpr ranged_default_t<uint32_t> kTransitStartEndMaxDistanceRange{0, kTransi
                                                                       100000}; // Max 100k
 constexpr ranged_default_t<uint32_t> kTransitTransferMaxDistanceRange{0, kTransitTransferMaxDistance,
                                                                       50000}; // Max 50k
+
+// Weighting factor based on road class. These apply penalties to higher class
+// roads. These penalties are modulated by the useroads factor - further
+// avoiding higher class roads for those with low propensity for using roads.
+constexpr float kRoadClassFactor[] = {
+    1.0f,  // Motorway
+    0.4f,  // Trunk
+    0.2f,  // Primary
+    0.1f,  // Secondary
+    0.05f, // Tertiary
+    0.05f, // Unclassified
+    0.0f,  // Residential
+    0.5f   // Service, other
+};
+
+constexpr ranged_default_t<float> kUseRoadRange{0.0f, kDefaultUseRoad, 1.0f};
 constexpr ranged_default_t<float> kUseHillsRange{0.0f, kDefaultUseHills, 1.0f};
 
 constexpr ranged_default_t<float> kBSSCostRange{0, kDefaultBssCost, kMaxPenalty};
@@ -488,6 +505,9 @@ public:
   float step_penalty_;             // Penalty applied to steps/stairs (seconds).
   float elevator_penalty_;         // Penalty applied to elevator (seconds).
 
+  float use_roads_;                     // Preference of using roads between 0 and 1
+  float road_factor_;                   // Road factor based on use_roads_
+
   // Elevation/grade penalty (weighting applied based on the edge's weighted
   // grade (relative value from 0-15)
   float grade_penalty[16];
@@ -598,6 +618,13 @@ PedestrianCost::PedestrianCost(const Costing& costing)
     max_hiking_difficulty_ = SacScale::kNone;
   }
 
+  // Willingness to use roads. Make sure this is within range [0, 1].
+  use_roads_ = costing_options.use_roads();
+
+  // Set the road classification factor. use_roads factors above 0.5 start to
+  // reduce the weight difference between road classes while factors below 0.5
+  // start to increase the differences.
+  road_factor_ = (use_roads_ >= 0.5f) ? 1.5f - use_roads_ : 2.0f - use_roads_ * 2.0f;
   mode_factor_ = costing_options.mode_factor();
   walkway_factor_ = costing_options.walkway_factor();
   sidewalk_factor_ = costing_options.sidewalk_factor();
@@ -702,9 +729,58 @@ Cost PedestrianCost::EdgeCost(const baldr::DirectedEdge* edge,
   // Represents how stressful a roadway is without looking at grade or cycle accommodations
   float roadway_stress = 1.0f;
 
+  float accommodation_factor = 1.0f;
+
+  // Special use cases: cycleway, footway, and path
+  if (edge->use() == Use::kCycleway || edge->use() == Use::kFootway || edge->use() == Use::kPath) {
+
+    // Differentiate how segregated the way is from pedestrians
+    if (edge->cyclelane() == CycleLane::kSeparated) { // No pedestrians allowed on path
+      accommodation_factor = use_roads_ * 0.8f;
+    } else if (edge->cyclelane() == CycleLane::kDedicated) { // Segregated lane from pedestrians
+      accommodation_factor = 0.1f + use_roads_ * 0.9f;
+    } else { // Share path with pedestrians
+      accommodation_factor = 0.2f + use_roads_;
+    }
+  } else if (edge->use() == Use::kMountainBike) {
+    // Slightly less reduction than a footway or path because even with a mountain bike
+    // these paths can be a little stressful to ride. No traffic though so still favorable
+    accommodation_factor = 0.3f + use_roads_;
+  } else if (edge->use() == Use::kLivingStreet) {
+    roadway_stress = 0.2f + use_roads_ * 0.8f;
+  } else if (edge->use() == Use::kTrack) {
+    roadway_stress = 0.5f + use_roads_;
+  } else {
+    // Favor roads where a cycle lane exists
+    if (edge->cyclelane() == CycleLane::kShared) {
+      accommodation_factor = 0.9f + use_roads_ * 0.05f;
+    } else if (edge->cyclelane() == CycleLane::kDedicated) {
+      accommodation_factor = 0.4f + use_roads_ * 0.45f;
+    } else if (edge->cyclelane() == CycleLane::kSeparated) {
+      accommodation_factor = 0.15f + use_roads_ * 0.6f;
+    } else if (edge->shoulder()) {
+      // If no cycle lane, but there is a shoulder then have a slight preference for this road
+      accommodation_factor = 0.7f + use_roads_ * 0.2f;
+    }
+
+    // Penalize roads that have more than one lane (in the direction of travel)
+    if (edge->lanecount() > 1) {
+      roadway_stress += (static_cast<float>(edge->lanecount()) - 1) * 0.05f * road_factor_;
+    }
+
+    // Add in penalization for road classification
+    roadway_stress += road_factor_ * kRoadClassFactor[static_cast<uint32_t>(edge->classification())];
+  }
+
+  // Penalize roads that have more than one lane (in the direction of travel)
+  // Add in penalization for road classification
+  roadway_stress += road_factor_ * kRoadClassFactor[static_cast<uint32_t>(edge->classification())];
+
+  float total_stress = accommodation_factor * roadway_stress;
+
   // TODO - consider using an array of "use factors" to avoid this conditional
   float factor = 1.0f + kSacScaleCostFactor[static_cast<uint8_t>(edge->sac_scale())] +
-                 grade_penalty[edge->weighted_grade()];
+                 grade_penalty[edge->weighted_grade()] + total_stress;
   if (edge->use() == Use::kFootway || edge->use() == Use::kSidewalk) {
     factor *= walkway_factor_;
   } else if (edge->use() == Use::kAlley) {
@@ -831,6 +907,7 @@ void ParsePedestrianCostOptions(const rapidjson::Document& doc,
                           "/transit_transfer_max_distance", transit_transfer_max_distance);
   JSON_PBF_RANGED_DEFAULT(co, kBSSCostRange, json, "/bss_rent_cost", bike_share_cost);
   JSON_PBF_RANGED_DEFAULT(co, kBSSPenaltyRange, json, "/bss_rent_penalty", bike_share_penalty);
+  JSON_PBF_RANGED_DEFAULT(co, kUseRoadRange, json, "/use_roads", use_roads);
   JSON_PBF_RANGED_DEFAULT(co, kUseHillsRange, json, "/use_hills", use_hills);
   JSON_PBF_RANGED_DEFAULT(co, kElevatorPenaltyRange, json, "/elevator_penalty", elevator_penalty);
 }
