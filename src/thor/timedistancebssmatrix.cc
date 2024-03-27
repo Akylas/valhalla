@@ -34,29 +34,17 @@ namespace valhalla {
 namespace thor {
 
 // Constructor with cost threshold.
-TimeDistanceBSSMatrix::TimeDistanceBSSMatrix() : settled_count_(0), current_cost_threshold_(0) {
+TimeDistanceBSSMatrix::TimeDistanceBSSMatrix(const boost::property_tree::ptree& config)
+    : settled_count_(0), current_cost_threshold_(0),
+      max_reserved_labels_count_(config.get<uint32_t>("max_reserved_labels_count_dijkstras",
+                                                      kInitialEdgeLabelCountDijkstras)),
+      clear_reserved_memory_(config.get<bool>("clear_reserved_memory", false)) {
 }
 
 float TimeDistanceBSSMatrix::GetCostThreshold(const float max_matrix_distance) const {
   // The threshold should be the time consumed by the pedestrian, because in the worst case,
   // the route may be pure pedestrian. Use a conservative walking speed of 2 MPH.
   return max_matrix_distance / (2.0f * kMPHtoMetersPerSec);
-}
-
-// Clear the temporary information generated during time + distance matrix
-// construction.
-void TimeDistanceBSSMatrix::clear() {
-  // Clear the edge labels and destination list
-  edgelabels_.clear();
-  destinations_.clear();
-  dest_edges_.clear();
-
-  // Clear elements from the adjacency list
-  adjacencylist_.clear();
-
-  // Clear the edge status flags
-  pedestrian_edgestatus_.clear();
-  bicycle_edgestatus_.clear();
 }
 
 // Expand from a node in the forward direction
@@ -208,19 +196,22 @@ std::vector<TimeDistance> TimeDistanceBSSMatrix::ComputeMatrix(
   // cost range based on DynamicCost.
   uint32_t bucketsize = std::max(pedestrian_costing_->UnitSize(), bicycle_costing_->UnitSize());
 
+  // Initialize destinations once for all origins
+  InitDestinations<expansion_direction>(graphreader, destinations);
+
   std::vector<TimeDistance> many_to_many(origins.size() * destinations.size());
   for (size_t origin_index = 0; origin_index < origins.size(); ++origin_index) {
+    edgelabels_.reserve(max_reserved_labels_count_);
     const auto& origin = origins.Get(origin_index);
     std::vector<TimeDistance> one_to_many;
 
     current_cost_threshold_ = GetCostThreshold(max_matrix_distance);
     adjacencylist_.reuse(0.0f, current_cost_threshold_, bucketsize, &edgelabels_);
 
-    // Initialize the origin and destination locations
+    // Initialize the origin and set the available destination edges
     settled_count_ = 0;
     SetOrigin<expansion_direction>(graphreader, origin);
-    // TODO:
-    SetDestinations<expansion_direction>(graphreader, destinations);
+    SetDestinationEdges();
 
     // Find shortest path
     graph_tile_ptr tile;
@@ -285,7 +276,7 @@ std::vector<TimeDistance> TimeDistanceBSSMatrix::ComputeMatrix(
         many_to_many[index] = one_to_many[source_index];
       }
     }
-    clear();
+    reset();
   }
   return many_to_many;
 }
@@ -391,14 +382,14 @@ void TimeDistanceBSSMatrix::SetOrigin(GraphReader& graphreader, const valhalla::
 
 // Set destinations
 template <const ExpansionType expansion_direction, const bool FORWARD>
-void TimeDistanceBSSMatrix::SetDestinations(
+void TimeDistanceBSSMatrix::InitDestinations(
     GraphReader& graphreader,
     const google::protobuf::RepeatedPtrField<valhalla::Location>& locations) {
   // For each destination
   uint32_t idx = 0;
   for (const auto& loc : locations) {
     // Set up the destination - consider each possible location edge.
-    bool added = false;
+    bool first_edge = true;
 
     // Only skip outbound edges if we have other options
     bool has_other_edges = false;
@@ -422,9 +413,9 @@ void TimeDistanceBSSMatrix::SetDestinations(
       }
 
       // Add a destination if this is the first allowed edge for the location
-      if (!added) {
+      if (first_edge) {
         destinations_.emplace_back();
-        added = true;
+        first_edge = false;
       }
 
       // Form a threshold cost (the total cost to traverse the edge)
@@ -447,7 +438,7 @@ void TimeDistanceBSSMatrix::SetDestinations(
 
       // Mark the edge as having a destination on it and add the
       // destination index
-      d.dest_edges[edgeid] = percent_along;
+      d.dest_edges_percent_along[edgeid] = percent_along;
       dest_edges_[edgeid].push_back(idx);
     }
     idx++;
@@ -476,16 +467,16 @@ bool TimeDistanceBSSMatrix::UpdateDestinations(
     }
 
     // See if this edge is part of the destination
-    // TODO - it should always be, but protect against not finding it
-    auto dest_edge = dest.dest_edges.find(pred.edgeid());
-    if (dest_edge == dest.dest_edges.end()) {
-      // If the edge isn't there but the path is trivial, then that means the edge
-      // was removed towards the beginning which is not an error.
+    // If the edge isn't there but the path is trivial, then that means the edge
+    // was removed towards the beginning which is not an error.
+    auto dest_available = dest.dest_edges_available.find(pred.edgeid());
+    if (dest_available == dest.dest_edges_available.end()) {
       if (!IsTrivial(pred.edgeid(), origin, locations.Get(dest_idx))) {
         LOG_ERROR("Could not find the destination edge");
       }
       continue;
     }
+    auto dest_edge = dest.dest_edges_percent_along.find(pred.edgeid());
 
     // Skip case where destination is along the origin edge, there is no
     // predecessor, and the destination cannot be reached via trivial path.
@@ -505,8 +496,8 @@ bool TimeDistanceBSSMatrix::UpdateDestinations(
 
     // Erase this edge from further consideration. Mark this destination as
     // settled if all edges have been found
-    dest.dest_edges.erase(dest_edge);
-    if (dest.dest_edges.empty()) {
+    dest.dest_edges_available.erase(dest_available);
+    if (dest.dest_edges_available.empty()) {
       dest.settled = true;
       settled_count_++;
     }

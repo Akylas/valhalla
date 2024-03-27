@@ -1,31 +1,30 @@
-#include "mjolnir/pbfgraphparser.h"
-#include "mjolnir/osmpbfparser.h"
-#include "mjolnir/util.h"
-
-#include "graph_lua_proc.h"
-#include "mjolnir/luatagtransform.h"
-#include "mjolnir/osmaccess.h"
-#include "mjolnir/osmpronunciation.h"
+#include <future>
+#include <optional>
+#include <thread>
+#include <utility>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
-#include <boost/optional.hpp>
 #include <boost/range/algorithm/remove_if.hpp>
-#include <future>
-#include <thread>
-#include <utility>
 
 #include "baldr/complexrestriction.h"
 #include "baldr/datetime.h"
 #include "baldr/graphconstants.h"
 #include "baldr/tilehierarchy.h"
+#include "graph_lua_proc.h"
 #include "midgard/aabb2.h"
 #include "midgard/logging.h"
 #include "midgard/pointll.h"
 #include "midgard/polyline2.h"
 #include "midgard/sequence.h"
 #include "midgard/tiles.h"
+#include "mjolnir/luatagtransform.h"
+#include "mjolnir/osmaccess.h"
+#include "mjolnir/osmpbfparser.h"
+#include "mjolnir/osmpronunciation.h"
+#include "mjolnir/pbfgraphparser.h"
 #include "mjolnir/timeparsing.h"
+#include "mjolnir/util.h"
 #include "proto/common.pb.h"
 
 using namespace valhalla::midgard;
@@ -160,6 +159,7 @@ public:
       }
     }
 
+    include_platforms_ = pt.get<bool>("include_platforms", false);
     include_driveways_ = pt.get<bool>("include_driveways", true);
     include_construction_ = pt.get<bool>("include_construction", false);
     infer_internal_intersections_ =
@@ -1409,6 +1409,7 @@ public:
     tag_handlers_["guidance_view:signboard:base:backward"] = [this]() {
       way_.set_bwd_signboard_base_index(osmdata_.name_offset_map.index(tag_.second));
     };
+    tag_handlers_["lit"] = [this]() { way_.set_lit(tag_.second == "true" ? true : false); };
   }
 
   static std::string get_lua(const boost::property_tree::ptree& pt) {
@@ -1435,7 +1436,7 @@ public:
     last_node_ = osmid;
 
     // Handle bike share stations separately
-    boost::optional<Tags> results = boost::none;
+    std::optional<Tags> results = std::nullopt;
     if (bss_nodes_) {
       // Get tags - do't bother with Lua callout if the taglist is empty
       if (tags.size() > 0) {
@@ -1733,6 +1734,11 @@ public:
       // Throw away constructions if include_construction_ is false
       if (!include_construction_ && (use = results.find("use")) != results.end() &&
           static_cast<Use>(std::stoi(use->second)) == Use::kConstruction) {
+        return;
+      }
+      // Throw away platforms if include_platforms_ is false
+      if (!include_platforms_ && (use = results.find("use")) != results.end() &&
+          static_cast<Use>(std::stoi(use->second)) == Use::kPlatform) {
         return;
       }
     } catch (const std::invalid_argument& arg) {
@@ -2727,6 +2733,8 @@ public:
           ref_pronunciation = int_ref_pronunciation_jeita_;
           direction_pronunciation = int_direction_pronunciation_jeita_;
           break;
+        case PronunciationAlphabet::kNone:
+          break;
       }
     } else {
       switch (type) {
@@ -2745,6 +2753,8 @@ public:
         case PronunciationAlphabet::kXJeita:
           ref_pronunciation = ref_pronunciation_jeita_;
           direction_pronunciation = direction_pronunciation_jeita_;
+          break;
+        case PronunciationAlphabet::kNone:
           break;
       }
     }
@@ -2793,6 +2803,8 @@ public:
           osm_pronunciation_.set_int_ref_pronunciation_jeita_index(
               osmdata_.name_offset_map.index(ref_pronunciation));
           break;
+        case PronunciationAlphabet::kNone:
+          break;
       }
     } else {
       switch (type) {
@@ -2811,6 +2823,8 @@ public:
         case PronunciationAlphabet::kXJeita:
           osm_pronunciation_.set_ref_pronunciation_jeita_index(
               osmdata_.name_offset_map.index(ref_pronunciation));
+          break;
+        case PronunciationAlphabet::kNone:
           break;
       }
     }
@@ -2850,6 +2864,8 @@ public:
               (index
                    ? osmdata_.name_offset_map.name(osm_pronunciation_.ref_pronunciation_jeita_index())
                    : "");
+          break;
+        case PronunciationAlphabet::kNone:
           break;
       }
 
@@ -2906,6 +2922,8 @@ public:
             // no matter what, clear out the int_ref.
             osm_pronunciation_.set_int_ref_pronunciation_jeita_index(0);
             break;
+          case PronunciationAlphabet::kNone:
+            break;
         }
       }
     }
@@ -2936,6 +2954,9 @@ public:
       direction_pronunciation_katakana_, int_direction_pronunciation_katakana_,
       direction_pronunciation_jeita_, int_direction_pronunciation_jeita_;
   std::string name_, service_, amenity_;
+
+  // Configuration option to include highway=platform for pedestrians
+  bool include_platforms_;
 
   // Configuration option to include driveways
   bool include_driveways_;
