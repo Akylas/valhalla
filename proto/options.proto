@@ -313,7 +313,7 @@ message Costing {
     bool disable_hierarchy_pruning = 83;
 
     oneof has_non_network_penalty {
-      float non_network_penalty = 82;
+      float non_network_penalty = 84;
     }
   }
 
