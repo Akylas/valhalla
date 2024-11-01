@@ -1,8 +1,5 @@
-#include <iostream>
-#include <unordered_map>
-
-#include "midgard/logging.h"
 #include "odin/directionsbuilder.h"
+#include "midgard/logging.h"
 #include "odin/enhancedtrippath.h"
 #include "odin/maneuversbuilder.h"
 #include "odin/markup_formatter.h"
@@ -144,6 +141,12 @@ void DirectionsBuilder::PopulateDirectionsLeg(const Options& options,
     trip_maneuver->set_end_shape_index(maneuver.end_shape_index());
     if (maneuver.portions_toll()) {
       trip_maneuver->set_portions_toll(maneuver.portions_toll());
+    }
+    if (maneuver.portions_highway()) {
+      trip_maneuver->set_portions_highway(maneuver.portions_highway());
+    }
+    if (maneuver.ferry()) {
+      trip_maneuver->set_portions_ferry(maneuver.ferry());
     }
 
     trip_maneuver->set_has_time_restrictions(maneuver.has_time_restrictions());
@@ -379,6 +382,12 @@ void DirectionsBuilder::PopulateDirectionsLeg(const Options& options,
     auto* trip_bss_info = trip_maneuver->mutable_bss_info();
     trip_bss_info->CopyFrom(maneuver.bss_info());
 
+    // set landmarks
+    for (auto& l : maneuver.landmarks()) {
+      auto* landmark = trip_maneuver->mutable_landmarks()->Add();
+      landmark->CopyFrom(l);
+    }
+
     // Travel type
     switch (maneuver.travel_mode()) {
       case TravelMode::kDrive: {
@@ -419,6 +428,11 @@ void DirectionsBuilder::PopulateDirectionsLeg(const Options& options,
     has_time_restrictions = node.edge().has_time_restrictions() || has_time_restrictions;
   }
   trip_directions.mutable_summary()->set_has_time_restrictions(has_time_restrictions);
+
+  // Populate toll, highway, ferry tags
+  trip_directions.mutable_summary()->set_has_toll(etp->summary().has_toll());
+  trip_directions.mutable_summary()->set_has_highway(etp->summary().has_highway());
+  trip_directions.mutable_summary()->set_has_ferry(etp->summary().has_ferry());
 }
 
 } // namespace odin

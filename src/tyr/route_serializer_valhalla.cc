@@ -1,4 +1,3 @@
-#include <unordered_map>
 #include <vector>
 
 #include "midgard/aabb2.h"
@@ -99,6 +98,9 @@ void summary(const valhalla::Api& api, int route_index, rapidjson::writer_wrappe
   double route_length = 0;
   double route_cost = 0;
   bool has_time_restrictions = false;
+  bool has_toll = false;
+  bool has_highway = false;
+  bool has_ferry = false;
   AABB2<PointLL> bbox(10000.0f, 10000.0f, -10000.0f, -10000.0f);
   std::vector<double> recost_times(api.options().recostings_size(), 0);
   for (int leg_index = 0; leg_index < api.directions().routes(route_index).legs_size(); ++leg_index) {
@@ -123,10 +125,16 @@ void summary(const valhalla::Api& api, int route_index, rapidjson::writer_wrappe
                             leg.summary().bbox().max_ll().lng(), leg.summary().bbox().max_ll().lat());
     bbox.Expand(leg_bbox);
     has_time_restrictions = has_time_restrictions || leg.summary().has_time_restrictions();
+    has_toll = has_toll || leg.summary().has_toll();
+    has_highway = has_highway || leg.summary().has_highway();
+    has_ferry = has_ferry || leg.summary().has_ferry();
   }
 
   writer.start_object("summary");
   writer("has_time_restrictions", has_time_restrictions);
+  writer("has_toll", has_toll);
+  writer("has_highway", has_highway);
+  writer("has_ferry", has_ferry);
   writer.set_precision(6);
   writer("min_lat", bbox.miny());
   writer("min_lon", bbox.minx());
@@ -184,6 +192,18 @@ void locations(const valhalla::Api& api, int route_index, rapidjson::writer_wrap
         writer("date_time", location->date_time());
       }
 
+      if (!location->time_zone_offset().empty()) {
+        writer("time_zone_offset", location->time_zone_offset());
+      }
+
+      if (!location->time_zone_name().empty()) {
+        writer("time_zone_name", location->time_zone_name());
+      }
+
+      if (location->waiting_secs()) {
+        writer("waiting", static_cast<uint64_t>(location->waiting_secs()));
+      }
+
       if (location->side_of_street() != valhalla::Location::kNone) {
         writer("side_of_street", Location_SideOfStreet_Enum_Name(location->side_of_street()));
       }
@@ -204,6 +224,9 @@ void legs(const valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t
   for (const auto& directions_leg : directions_legs) {
     writer.start_object(); // leg
     bool has_time_restrictions = false;
+    bool has_toll = false;
+    bool has_highway = false;
+    bool has_ferry = false;
 
     if (directions_leg.maneuver_size())
       writer.start_array("maneuvers");
@@ -270,9 +293,18 @@ void legs(const valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t
         ++recost_itr;
       }
 
-      // Portions toll and rough
+      // Portions toll, highway, ferry and rough
       if (maneuver.portions_toll()) {
         writer("toll", maneuver.portions_toll());
+        has_toll = true;
+      }
+      if (maneuver.portions_highway()) {
+        writer("highway", maneuver.portions_highway());
+        has_highway = true;
+      }
+      if (maneuver.portions_ferry()) {
+        writer("ferry", maneuver.portions_ferry());
+        has_ferry = true;
       }
       if (maneuver.portions_unpaved()) {
         writer("rough", maneuver.portions_unpaved());
@@ -413,7 +445,7 @@ void legs(const valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t
         if (transit_info.transit_stops().size() > 0) {
           writer.start_array("transit_stops");
           for (const auto& transit_stop : transit_info.transit_stops()) {
-            writer.start_object("transit_stop");
+            writer.start_object();
 
             // type
             if (transit_stop.type() == TransitPlatformInfo_Type_kStation) {
@@ -472,10 +504,10 @@ void legs(const valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t
 
       //  man->emplace("hasGate", maneuver.);
       //  man->emplace("hasFerry", maneuver.);
-      //“portionsTollNote” : “<portionsTollNote>”,
-      //“portionsUnpavedNote” : “<portionsUnpavedNote>”,
-      //“gateAccessRequiredNote” : “<gateAccessRequiredNote>”,
-      //“checkFerryInfoNote” : “<checkFerryInfoNote>”
+      // “portionsTollNote” : “<portionsTollNote>”,
+      // “portionsUnpavedNote” : “<portionsUnpavedNote>”,
+      // “gateAccessRequiredNote” : “<gateAccessRequiredNote>”,
+      // “checkFerryInfoNote” : “<checkFerryInfoNote>”
 
       writer.end_object(); // maneuver
     }
@@ -483,8 +515,64 @@ void legs(const valhalla::Api& api, int route_index, rapidjson::writer_wrapper_t
       writer.end_array(); // maneuvers
     }
 
+    // Store elevation for the leg
+    if (api.options().elevation_interval() > 0.0f) {
+      writer.set_precision(1);
+      float unit_factor = api.options().units() == Options::miles ? kFeetPerMeter : 1.0f;
+      float interval = api.options().elevation_interval();
+      writer("elevation_interval", interval * unit_factor);
+      auto elevation = tyr::get_elevation(*trip_leg_itr, interval);
+
+      writer.start_array("elevation");
+      for (const auto& h : elevation) {
+        writer(h * unit_factor);
+      }
+      writer.end_array(); // elevation
+    }
+
     writer.start_object("summary");
+
+    // Does the user want admin info?
+    if (api.options().admin_crossings()) {
+      // write the admin array
+      writer.start_array("admins");
+      for (const auto& admin : trip_leg_itr->admin()) {
+        writer.start_object();
+        writer("country_code", admin.country_code());
+        writer("country_text", admin.country_text());
+        writer("state_code", admin.state_code());
+        writer("state_text", admin.state_text());
+        writer.end_object();
+      }
+      writer.end_array();
+
+      if (trip_leg_itr->admin_size() > 1) {
+        // write the admin crossings
+        auto node_itr = trip_leg_itr->node().begin();
+        auto next_node_itr = trip_leg_itr->node().begin();
+        next_node_itr++;
+        writer.start_array("admin_crossings");
+
+        while (next_node_itr != trip_leg_itr->node().end()) {
+          if (next_node_itr->admin_index() != node_itr->admin_index()) {
+            writer.start_object();
+            writer("from_admin_index", static_cast<uint64_t>(node_itr->admin_index()));
+            writer("to_admin_index", static_cast<uint64_t>(next_node_itr->admin_index()));
+            writer("begin_shape_index", static_cast<uint64_t>(node_itr->edge().begin_shape_index()));
+            writer("end_shape_index", static_cast<uint64_t>(node_itr->edge().end_shape_index()));
+            writer.end_object();
+          }
+          ++node_itr;
+          ++next_node_itr;
+        }
+        writer.end_array();
+      }
+    }
+
     writer("has_time_restrictions", has_time_restrictions);
+    writer("has_toll", has_toll);
+    writer("has_highway", has_highway);
+    writer("has_ferry", has_ferry);
     writer.set_precision(6);
     writer("min_lat", directions_leg.summary().bbox().min_ll().lat());
     writer("min_lon", directions_leg.summary().bbox().min_ll().lng());

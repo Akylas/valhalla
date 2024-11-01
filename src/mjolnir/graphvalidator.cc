@@ -1,18 +1,14 @@
-
 #include "mjolnir/graphvalidator.h"
 #include "mjolnir/graphtilebuilder.h"
 #include "mjolnir/util.h"
 
 #include <boost/format.hpp>
 #include <future>
-#include <iostream>
 #include <list>
 #include <mutex>
 #include <numeric>
-#include <ostream>
-#include <queue>
+#include <random>
 #include <set>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -621,6 +617,7 @@ void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
     if (densities[level].empty()) {
       continue;
     }
+#ifdef LOGGING_LEVEL_DEBUG
     // Get the average density and the max density
     float max_density = 0.0f;
     float sum = 0.0f;
@@ -632,6 +629,7 @@ void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
     }
     LOG_DEBUG("Average density = " + std::to_string(sum / densities[level].size()) +
               " max = " + std::to_string(max_density));
+#endif
   }
 }
 } // namespace mjolnir
