@@ -27,14 +27,10 @@ public:
   virtual ~NarrativeBuilder() = default;
 
   NarrativeBuilder(NarrativeBuilder&&) = default;
-  // CARTOHACK
   NarrativeBuilder& operator=(NarrativeBuilder&&) = delete;
-  //NarrativeBuilder& operator=(NarrativeBuilder&&) = default;
 
   NarrativeBuilder(const NarrativeBuilder&) = default;
-  // CARTOHACK
   NarrativeBuilder& operator=(const NarrativeBuilder&) = delete;
-  //NarrativeBuilder& operator=(const NarrativeBuilder&) = default;
 
   void Build(std::list<Maneuver>& maneuvers);
 
@@ -439,6 +435,8 @@ protected:
   std::string FormTransitPlatformCountLabel(
       size_t stop_count,
       const std::unordered_map<std::string, std::string>& transit_platform_count_labels);
+
+  std::string FormPassInstruction(Maneuver& maneuver);
 
   /**
    * Returns the plural category based on the value of the specified
