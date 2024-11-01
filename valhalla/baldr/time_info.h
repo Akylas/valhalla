@@ -29,7 +29,6 @@ struct TimeInfo {
 
   // the ordinal second from the beginning of the week (starting monday at 00:00)
   // used to look up historical traffic as the route progresses
-  // this defaults to mondays at noon if no time is provided (for constrained flow lookup)
   uint64_t second_of_week : 20;
 
   // the distance in seconds from now
@@ -256,6 +255,10 @@ struct TimeInfo {
   // returns localtime as a string
   std::string date_time() const {
     return DateTime::seconds_to_date(local_time, dt::get_tz_db().from_index(timezone_index), false);
+  }
+
+  uint32_t day_seconds() const {
+    return static_cast<uint32_t>(second_of_week) % midgard::kSecondsPerDay;
   }
 
   // for unit tests

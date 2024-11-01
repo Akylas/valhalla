@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-#ifdef CURL_STATICLIB
+#ifdef ENABLE_HTTP
 
 #if defined(_MSC_VER) && !defined(NOGDI)
 #define NOGDI // prevents winsock2.h drag in wingdi.h
@@ -34,8 +34,6 @@ static std::shared_ptr<CURL> init_curl() {
   static curl_singleton_t s;
   return std::shared_ptr<CURL>(curl_easy_init(), [](CURL* c) { curl_easy_cleanup(c); });
 }
-
-char ALL_ENCODINGS[] = "";
 
 size_t write_callback(char* in, size_t block_size, size_t blocks, std::vector<char>* out) {
   if (!out) {
