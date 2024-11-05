@@ -156,8 +156,10 @@ const locales_singleton_t& get_locales() {
 }
 
 const void add_locale(std::string key, std::string json) {
-    static locales_singleton_t locales = get_locales();
-  add_narrative_locale(locales, key, json);
+  static locales_singleton_t locales = get_locales();
+  if (locales.find(key) == locales.end()) {
+    add_narrative_locale(locales, key, json);
+  }
 }
 
 const std::unordered_map<std::string, std::string>& get_locales_json() {
