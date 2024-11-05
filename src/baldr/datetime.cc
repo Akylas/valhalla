@@ -720,8 +720,10 @@ tz_db_t::tz_db_t() {
   zones.reserve(tz_name_to_id.size());
   for (const auto& tz_pair : tz_name_to_id) {
     // we find either the official timezone or we get the target timezone of a link
-    auto* tz = db.locate_zone(tz_pair.first);
-    zones[tz_pair.second] = &*tz;
+    try{
+        auto* tz = db.locate_zone(tz_pair.first);
+        zones[tz_pair.second] = &*tz;
+    } catch (std::exception& e) {}
   }
 }
 
