@@ -156,11 +156,8 @@ const locales_singleton_t& get_locales() {
   return locales;
 }
 
-const void add_locale(std::string key, std::string json) {
-  static locales_singleton_t locales = get_locales();
-  if (locales.find(key) == locales.end()) {
+const void add_locale(valhalla::odin::locales_singleton_t& locales, std::string key, std::string json) {
     add_narrative_locale(locales, key, json);
-  }
 }
 
 const std::unordered_map<std::string, std::string>& get_locales_json() {
