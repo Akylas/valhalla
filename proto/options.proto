@@ -503,4 +503,8 @@ message Options {
   bool voice_instructions = 57;                                    // Whether to return voiceInstructions in the OSRM serializer response
   bool dedupe = 58;                                                // Keep track of edges and override their properties during expansion,
                                                                    // ensuring that each edge appears in the output only once. [default = false]
+
+
+  // here we store custom locales clients might be adding at runtime
+  map<string, string> customLocales = 200;
 }

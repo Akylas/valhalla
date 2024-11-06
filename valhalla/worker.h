@@ -58,7 +58,7 @@ struct valhalla_exception_t : public std::runtime_error {
  * @param api           The pbf request, this will be modified either with the json provided or, if
  *                      already filled out, it will be validated and the json will be ignored
  */
-void ParseApi(const std::string& json_request, Options::Action action, Api& api);
+void ParseApi(const std::string& json_request, Options::Action action, Api& api, std::unordered_map<std::string, std::string>& customLocales);
 #ifdef ENABLE_SERVICES
 /**
  * Take the json OR pbf request and parse/validate it. If you pass a protobuf mime type in the request

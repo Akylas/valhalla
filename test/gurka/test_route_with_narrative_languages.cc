@@ -107,8 +107,9 @@ const std::vector<std::pair<std::string, std::string>> RouteWithNarrativeLanguag
 
 ///////////////////////////////////////////////////////////////////////////////
 TEST_F(RouteWithNarrativeLanguages, CheckLanguageCount) {
+  std::unordered_map<std::string, std::string> customLocales;
   // Verify that the language/phrase test count matches the narrative locale count
-  EXPECT_EQ(valhalla::odin::get_locales().size(), RouteWithNarrativeLanguages::lang_phrase.size());
+  EXPECT_EQ(valhalla::odin::get_locales(customLocales).size(), RouteWithNarrativeLanguages::lang_phrase.size());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
