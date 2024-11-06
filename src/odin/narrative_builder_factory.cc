@@ -16,10 +16,10 @@ NarrativeBuilderFactory::Create(const Options& options,
                                 const EnhancedTripLeg* trip_path,
                                 const MarkupFormatter& markup_formatter) {
 
-  json_locales_map_t customLocales;
+  std::unordered_map<std::string, std::string> customLocales;
   for (auto & pair : options.customlocales())
   {
-     customLocales->insert(pair);
+     customLocales.insert(pair);
   }
   auto locales = get_locales(customLocales);
   // Get the locale dictionary
