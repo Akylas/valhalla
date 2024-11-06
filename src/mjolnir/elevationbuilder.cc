@@ -294,7 +294,7 @@ void add_elevations_to_multiple_tiles(const boost::property_tree::ptree& pt,
     tilequeue.pop_front();
     lock.unlock();
 
-    add_elevations_to_single_tile(graphreader, lock, geo_attribute_cache, sample, tile_id, add_elevation_in_tiles);
+    add_elevations_to_single_tile(graphreader, lock, geo_attribute_cache, sample, tile_id, add_elevation_in_tiles.get_value_or(true));
   }
 }
 
