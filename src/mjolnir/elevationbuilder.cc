@@ -112,7 +112,7 @@ void add_elevations_to_single_tile(GraphReader& graphreader,
                                    cache_t& cache,
                                    const std::unique_ptr<valhalla::skadi::sample>& sample,
                                    GraphId& tile_id, 
-                                   boost::optional<bool> add_elevation_in_tiles) {
+                                   boost::optional<bool> store_elevation_along_edges) {
   // Get the tile. Serialize the entire tile?
   GraphTileBuilder tilebuilder(graphreader.tile_dir(), tile_id, true);
 
@@ -220,7 +220,7 @@ void add_elevations_to_single_tile(GraphReader& graphreader,
       // Encode elevation along the edge and add to EdgeInfo along with the mean elevation.
       // Bridges, tunnels, ferries are special cases. Increment the new edge info offset.
       std::vector<int8_t> encoded;
-      if (add_elevation_in_tiles) {
+      if (store_elevation_along_edges) {
         auto wayid = tilebuilder.edgeinfo(&directededge).wayid();
         if (directededge.bridge() || directededge.tunnel() || directededge.use() == Use::kFerry) {
           encoded = encode_btf_elevation(sample, shape, length, wayid);
@@ -275,7 +275,7 @@ void add_elevations_to_multiple_tiles(const boost::property_tree::ptree& pt,
                                       std::promise<uint32_t>& /*result*/) {
   // Local Graphreader
   GraphReader graphreader(pt.get_child("mjolnir"));
-  boost::optional<bool> add_elevation_in_tiles = pt.get_optional<bool>("additional_data.add_elevation_in_tiles");
+  boost::optional<bool> store_elevation_along_edges = pt.get_optional<bool>("mjolnir.store_elevation_along_edges");
 
   // We usually end up accessing the same shape twice (once for each direction along an edge).
   // Use a cache to record elevation attributes based on the EdgeInfo offset. This includes
@@ -294,7 +294,7 @@ void add_elevations_to_multiple_tiles(const boost::property_tree::ptree& pt,
     tilequeue.pop_front();
     lock.unlock();
 
-    add_elevations_to_single_tile(graphreader, lock, geo_attribute_cache, sample, tile_id, add_elevation_in_tiles.get_value_or(true));
+    add_elevations_to_single_tile(graphreader, lock, geo_attribute_cache, sample, tile_id, store_elevation_along_edges.get_value_or(true));
   }
 }
 
