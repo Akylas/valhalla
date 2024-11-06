@@ -1,20 +1,6 @@
 name: Update public FOSSGIS servers 
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - '.github/workflows/**'
-      - 'src/**'
-      - 'valhalla/**'
-      - 'proto/**'
-      - 'scripts/**'
-      - 'lua/**'
-      - 'cmake/**'
-      - 'third_party/**'
-      - 'locales/**'
-      - 'CMakeLists.txt'
   workflow_dispatch:
 
 jobs:
