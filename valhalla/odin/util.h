@@ -6,6 +6,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <boost/optional.hpp>
+
 #include <valhalla/baldr/rapidjson_utils.h>
 #include <valhalla/odin/narrative_dictionary.h>
 #include <valhalla/proto/options.pb.h>
@@ -71,13 +73,14 @@ std::string get_localized_time(const std::string& date_time, const std::locale& 
  */
 std::string get_localized_date(const std::string& date_time, const std::locale& locale);
 
+typedef boost::optional<std::map<std::string, std::string>&> json_locales_map_t;
 using locales_singleton_t = std::unordered_map<std::string, std::shared_ptr<NarrativeDictionary>>;
 /**
  * Returns locale strings mapped to NarrativeDictionaries containing parsed narrative information
  *
  * @return the map of locales to NarrativeDictionaries
  */
-const locales_singleton_t& get_locales(std::unordered_map<std::string, std::string>& custom_locales);
+const locales_singleton_t& get_locales(json_locales_map_t custom_locales);
 
 /**
  * Returns locale strings mapped to json strings defining the dictionaries

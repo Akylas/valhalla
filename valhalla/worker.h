@@ -5,6 +5,7 @@
 #include <valhalla/baldr/json.h>
 #include <valhalla/baldr/rapidjson_utils.h>
 #include <valhalla/midgard/util.h>
+#include <valhalla/odin/util.h>
 #include <valhalla/proto/api.pb.h>
 #include <valhalla/valhalla.h>
 
@@ -57,8 +58,10 @@ struct valhalla_exception_t : public std::runtime_error {
  * @param action        Which action to perform
  * @param api           The pbf request, this will be modified either with the json provided or, if
  *                      already filled out, it will be validated and the json will be ignored
+ * @param customLocales optional custom locales (to be added to built ones)
  */
-void ParseApi(const std::string& json_request, Options::Action action, Api& api, std::unordered_map<std::string, std::string>& customLocales);
+void ParseApi(const std::string& json_request, Options::Action action, Api& api, const odin::json_locales_map_t customLocales = odin::json_locales_map_t());
+// void ParseApi(const std::string& json_request, Options::Action action, Api& api);
 #ifdef ENABLE_SERVICES
 /**
  * Take the json OR pbf request and parse/validate it. If you pass a protobuf mime type in the request
@@ -69,8 +72,10 @@ void ParseApi(const std::string& json_request, Options::Action action, Api& api,
  * @param api           The pbf request, this will be modified either with the json provided or, if
  *                      pbf bytes were passed, they will be deserialized into this object and any json
  *                      will be ignored
+ * @param customLocales optional custom locales (to be added to built ones)
  */
-void ParseApi(const prime_server::http_request_t& http_request, Api& api);
+void ParseApi(const prime_server::http_request_t& http_request, Api& api, const odin::json_locales_map_t customLocales = odin::json_locales_map_t());
+// void ParseApi(const prime_server::http_request_t& http_request, Api& api);
 #endif
 
 std::string serialize_error(const valhalla_exception_t& exception, Api& options);
