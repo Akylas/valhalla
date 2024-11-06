@@ -83,7 +83,7 @@ const locales_singleton_t& get_locales();
  * add locale 
  *
  */
-const void add_locale(std::string key, std::string json);
+const void add_locale(valhalla::odin::locales_singleton_t& locales, std::string key, std::string json);
 
 /**
  * Returns locale strings mapped to json strings defining the dictionaries
