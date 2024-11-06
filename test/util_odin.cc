@@ -12,7 +12,9 @@ using namespace valhalla::odin;
 namespace {
 
 TEST(UtilOdin, test_get_locales) {
-  const auto& init = get_locales();
+  std::unordered_map<std::string, std::string> customLocales;
+  auto locales = get_locales(customLocales)
+  const auto& init = locales;
   EXPECT_GE(init.size(), 1) << "Should be at least one parsable test json file";
   EXPECT_NE(init.find("en-US"), init.cend()) << "Should find 'en-US' locales file";
 }

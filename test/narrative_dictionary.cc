@@ -376,10 +376,12 @@ const std::map<std::string, std::string> kExpectedArriveVerbalPhrases =
 
 const NarrativeDictionary& GetNarrativeDictionary(const std::string& lang_tag) {
   // Get the locale dictionary
-  const auto phrase_dictionary = get_locales().find(lang_tag);
+  std::unordered_map<std::string, std::string> customLocales;
+  auto locales = get_locales(customLocales);
+  const auto phrase_dictionary = locales.find(lang_tag);
 
   // If language tag is not found then throw error
-  EXPECT_NE(phrase_dictionary, get_locales().end()) << "Invalid language tag.";
+  EXPECT_NE(phrase_dictionary, locales.end()) << "Invalid language tag.";
 
   return *phrase_dictionary->second;
 }

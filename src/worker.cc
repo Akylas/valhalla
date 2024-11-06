@@ -641,7 +641,7 @@ void parse_recostings(const rapidjson::Document& doc,
  * @param action   which request action will be performed
  * @param options  the options to fill out or validate if they are already filled out
  */
-void from_json(rapidjson::Document& doc, Options::Action action, Api& api) {
+void from_json(rapidjson::Document& doc, Options::Action action, Api& api, std::unordered_map<std::string, std::string>& customLocales) {
   // if its a pbf request we want to keep the options and clear the rest
   bool pbf = false;
   if (api.has_options() && doc.ObjectEmpty()) {
@@ -659,6 +659,14 @@ void from_json(rapidjson::Document& doc, Options::Action action, Api& api) {
   auto& options = *api.mutable_options();
   if (Options::Action_IsValid(action))
     options.set_action(action);
+
+  if (customLocales.size() > 0) {
+      for (const auto& locale : customLocales) {
+          (*options.mutable_customlocales())[locale.first] = locale.second;
+      }
+  }
+
+
 
   // TODO: stop doing this after a sufficient amount of time has passed
   // move anything nested in deprecated directions_options up to the top level
@@ -725,7 +733,9 @@ void from_json(rapidjson::Document& doc, Options::Action action, Api& api) {
   options.set_reverse(rapidjson::get<bool>(doc, "/reverse", false));
 
   auto language = rapidjson::get_optional<std::string>(doc, "/language");
-  if (language && odin::get_locales().find(*language) != odin::get_locales().end()) {
+  auto locales = odin::get_locales(customLocales);
+
+  if (language && locales.find(*language) != locales.end()) {
     options.set_language(*language);
   }
   if (!options.has_language_case()) {
@@ -1339,10 +1349,10 @@ std::string serialize_error(const valhalla_exception_t& exception, Api& request)
   return body.str();
 }
 
-void ParseApi(const std::string& request, Options::Action action, valhalla::Api& api) {
+void ParseApi(const std::string& request, Options::Action action, valhalla::Api& api, std::unordered_map<std::string, std::string>& customLocales) {
   // maybe parse some json
   auto document = from_string(request, valhalla_exception_t{100});
-  from_json(document, action, api);
+  from_json(document, action, api, customLocales);
 }
 
 #ifdef ENABLE_SERVICES

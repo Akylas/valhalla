@@ -77,13 +77,7 @@ using locales_singleton_t = std::unordered_map<std::string, std::shared_ptr<Narr
  *
  * @return the map of locales to NarrativeDictionaries
  */
-const locales_singleton_t& get_locales();
-
-/**
- * add locale 
- *
- */
-const void add_locale(valhalla::odin::locales_singleton_t& locales, std::string key, std::string json);
+const locales_singleton_t& get_locales(std::unordered_map<std::string, std::string>& custom_locales);
 
 /**
  * Returns locale strings mapped to json strings defining the dictionaries

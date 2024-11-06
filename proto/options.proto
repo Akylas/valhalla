@@ -508,4 +508,7 @@ message Options {
   bool dedupe = 58;                                                // Keep track of edges and override their properties during expansion,
                                                                    // ensuring that each edge appears in the output only once. [default = false]
   bool admin_crossings = 59;                                     // Include administrative boundary crossings
+
+  // here we store custom locales clients might be adding at runtime
+  map<string, string> customLocales = 200;
 }

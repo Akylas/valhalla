@@ -16,11 +16,17 @@ NarrativeBuilderFactory::Create(const Options& options,
                                 const EnhancedTripLeg* trip_path,
                                 const MarkupFormatter& markup_formatter) {
 
+  std::unordered_map<std::string, std::string> customLocales;
+  for (auto & pair : options.customlocales())
+  {
+     customLocales.insert(pair);
+  }
+  auto locales = get_locales(customLocales);
   // Get the locale dictionary
-  const auto phrase_dictionary = get_locales().find(options.language());
+  const auto phrase_dictionary = locales.find(options.language());
 
   // If language tag is not found then throw error
-  if (phrase_dictionary == get_locales().end()) {
+  if (phrase_dictionary == locales.end()) {
     throw std::runtime_error("Invalid language tag.");
   }
 
