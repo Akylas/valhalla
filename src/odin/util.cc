@@ -65,13 +65,13 @@ void add_narrative_locale(valhalla::odin::locales_singleton_t& locales, const st
   }
 }
 
-valhalla::odin::locales_singleton_t load_narrative_locals(std::unordered_map<std::string, std::string>& custom_locales) {
+valhalla::odin::locales_singleton_t load_narrative_locals(valhalla::odin::json_locales_map_t custom_locales) {
   valhalla::odin::locales_singleton_t locales;
   // for each locale
   for (const auto& json : locales_json) {
     add_narrative_locale(locales, json.first, json.second);
   }
-    for (const auto& custom_locale : custom_locales) {
+    for (const auto& custom_locale : *custom_locales) {
         if (locales.find(custom_locale.first) == locales.end()) {
             add_narrative_locale(locales, custom_locale.first, custom_locale.second);
         }
@@ -154,7 +154,7 @@ std::string get_localized_date(const std::string& date_time, const std::locale& 
   return date::format(locale, "%x", local_tp);
 }
 
-const locales_singleton_t& get_locales(std::unordered_map<std::string, std::string>& custom_locales) {
+const locales_singleton_t& get_locales(valhalla::odin::json_locales_map_t custom_locales) {
   // thread safe static initializer for singleton
   static locales_singleton_t locales(load_narrative_locals(custom_locales));
   return locales;

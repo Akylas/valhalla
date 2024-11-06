@@ -641,7 +641,7 @@ void parse_recostings(const rapidjson::Document& doc,
  * @param action   which request action will be performed
  * @param options  the options to fill out or validate if they are already filled out
  */
-void from_json(rapidjson::Document& doc, Options::Action action, Api& api, std::unordered_map<std::string, std::string>& customLocales) {
+void from_json(rapidjson::Document& doc, Options::Action action, Api& api, odin::json_locales_map_t customLocales) {
   // if its a pbf request we want to keep the options and clear the rest
   bool pbf = false;
   if (api.has_options() && doc.ObjectEmpty()) {
@@ -660,8 +660,8 @@ void from_json(rapidjson::Document& doc, Options::Action action, Api& api, std::
   if (Options::Action_IsValid(action))
     options.set_action(action);
 
-  if (customLocales.size() > 0) {
-      for (const auto& locale : customLocales) {
+  if (customLocales->size() > 0) {
+      for (const auto& locale : *customLocales) {
           (*options.mutable_customlocales())[locale.first] = locale.second;
       }
   }
@@ -1349,14 +1349,14 @@ std::string serialize_error(const valhalla_exception_t& exception, Api& request)
   return body.str();
 }
 
-void ParseApi(const std::string& request, Options::Action action, valhalla::Api& api, std::unordered_map<std::string, std::string>& customLocales) {
+void ParseApi(const std::string& request, Options::Action action, valhalla::Api& api, odin::json_locales_map_t customLocales) {
   // maybe parse some json
   auto document = from_string(request, valhalla_exception_t{100});
   from_json(document, action, api, customLocales);
 }
 
 #ifdef ENABLE_SERVICES
-void ParseApi(const http_request_t& request, valhalla::Api& api) {
+void ParseApi(const http_request_t& request, valhalla::Api& api, odin::json_locales_map_t customLocales) {
   // block all but get and post
   if (request.method != method_t::POST && request.method != method_t::GET) {
     throw valhalla_exception_t{101};
@@ -1380,7 +1380,7 @@ void ParseApi(const http_request_t& request, valhalla::Api& api) {
     // validate the options
     rapidjson::Document dummy;
     dummy.SetObject();
-    from_json(dummy, action, api);
+    from_json(dummy, action, api, customLocales);
     return;
   }
 
@@ -1425,7 +1425,7 @@ void ParseApi(const http_request_t& request, valhalla::Api& api) {
   }
 
   // parse out the options
-  from_json(document, action, api);
+  from_json(document, action, api, customLocales);
 }
 
 const headers_t::value_type CORS{"Access-Control-Allow-Origin", "*"};
