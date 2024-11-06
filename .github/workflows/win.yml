@@ -1,25 +1,5 @@
 name: Windows CI
 on:
-  push:
-    paths-ignore:
-      - '*.md'
-      - .circleci/
-      - docs/
-      - run_route_scripts/
-      - test/
-      - test_requests/
-    branches:
-      - master
-  pull_request:
-    paths-ignore:
-      - '*.md'
-      - .circleci/
-      - docs/
-      - run_route_scripts/
-      - test/
-      - test_requests/
-    branches:
-      - master
   workflow_dispatch:
     inputs:
       debug_enabled:
