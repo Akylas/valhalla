@@ -73,7 +73,7 @@ std::string get_localized_time(const std::string& date_time, const std::locale& 
  */
 std::string get_localized_date(const std::string& date_time, const std::locale& locale);
 
-typedef boost::optional<std::map<std::string, std::string>&> json_locales_map_t;
+typedef boost::optional<std::unordered_map<std::string, std::string>&> json_locales_map_t;
 using locales_singleton_t = std::unordered_map<std::string, std::shared_ptr<NarrativeDictionary>>;
 /**
  * Returns locale strings mapped to NarrativeDictionaries containing parsed narrative information
