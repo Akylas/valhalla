@@ -55,7 +55,7 @@ namespace sif {
 namespace {
 
 // max penalty to apply when use tracks
-constexpr float kMaxTrackPenalty = 300.f; // 5 min
+constexpr float kMaxTrackPenalty =1000.f; // 5 min
 
 // min and max factors to apply when use tracks
 constexpr float kMinTrackFactor = 0.8f;
@@ -130,7 +130,7 @@ BaseCostingOptionsConfig::BaseCostingOptionsConfig()
       rail_ferry_cost_{0.f, kDefaultRailFerryCost, kMaxPenalty},
       use_rail_ferry_{0.f, kDefaultUseRailFerry, 1.f}, service_penalty_{0.f, kDefaultServicePenalty,
                                                                         kMaxPenalty},
-      service_factor_{kMinFactor, kDefaultServiceFactor, kMaxFactor}, use_tracks_{0.f,
+      service_factor_{kMinFactor, kDefaultServiceFactor, kMaxFactor}, use_tracks_{-100.f,
                                                                                   kDefaultUseTracks,
                                                                                   1.f},
       use_living_streets_{0.f, kDefaultUseLivingStreets, 1.f}, use_lit_{0.f, kDefaultUseLit, 1.f},
