@@ -200,9 +200,9 @@ constexpr uint32_t kSpeedPenaltyThreshold = 40; // 40 KPH ~ 25 MPH
 constexpr float kBicycleNetworkFactor = 0.95f;
 
 // Valid ranges and defaults
-constexpr ranged_default_t<float> kUseRoadRange{0.0f, kDefaultUseRoad, 1.0f};
-constexpr ranged_default_t<float> kUseHillsRange{0.0f, kDefaultUseHills, 1.0f};
-constexpr ranged_default_t<float> kAvoidBadSurfacesRange{0.0f, kDefaultAvoidBadSurfaces, 1.0f};
+constexpr ranged_default_t<float> kUseRoadRange{-100.0f, kDefaultUseRoad, 1.0f};
+constexpr ranged_default_t<float> kUseHillsRange{-100.0f, kDefaultUseHills, 1.0f};
+constexpr ranged_default_t<float> kAvoidBadSurfacesRange{0.0f, kDefaultAvoidBadSurfaces, 100.0f};
 
 constexpr ranged_default_t<float> kBSSCostRange{0, kDefaultBssCost, kMaxPenalty};
 constexpr ranged_default_t<float> kBSSPenaltyRange{0, kDefaultBssPenalty, kMaxPenalty};
