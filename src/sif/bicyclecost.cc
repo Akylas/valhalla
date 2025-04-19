@@ -427,6 +427,7 @@ protected:
                uint16_t disallow_mask = kDisallowNone) const override {
     return DynamicCost::Allowed(edge, tile, disallow_mask) && !edge->bss_connection() &&
            edge->use() != Use::kSteps &&
+           (!exclude_unpaved_ || pred.unpaved() || !edge->unpaved()) &&
            (avoid_bad_surfaces_ != 1.0f || edge->surface() <= worst_allowed_surface_);
   }
 };
