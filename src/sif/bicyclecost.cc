@@ -427,7 +427,6 @@ protected:
                uint16_t disallow_mask = kDisallowNone) const override {
     return DynamicCost::Allowed(edge, tile, disallow_mask) && !edge->bss_connection() &&
            edge->use() != Use::kSteps &&
-           (!exclude_unpaved_ || pred.unpaved() || !edge->unpaved()) &&
            (avoid_bad_surfaces_ != 1.0f || edge->surface() <= worst_allowed_surface_);
   }
 };
@@ -549,6 +548,7 @@ bool BicycleCost::Allowed(const baldr::DirectedEdge* edge,
   if (!IsAccessible(edge) || edge->is_shortcut() ||
       (!pred.deadend() && pred.opp_local_idx() == edge->localedgeidx() &&
        pred.mode() == TravelMode::kBicycle) ||
+      (exclude_unpaved_ && !pred.unpaved() && edge->unpaved()) ||
       (!ignore_turn_restrictions_ && (pred.restrictions() & (1 << edge->localedgeidx()))) ||
       IsUserAvoidEdge(edgeid)) {
     return false;
