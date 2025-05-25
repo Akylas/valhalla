@@ -464,7 +464,7 @@ BicycleCost::BicycleCost(const Costing& costing)
   avoid_bad_surfaces_ = costing_options.avoid_bad_surfaces();
   minimal_surface_penalized_ = kWorstAllowedSurface[static_cast<uint32_t>(type_)];
   worst_allowed_surface_ = avoid_bad_surfaces_ == 1.0f ? minimal_surface_penalized_ : Surface::kPath;
-  non_network_factor_ = 1.0f + costing_options.non_network_penalty();
+  non_network_factor_ = costing_options.non_network_penalty();
   // Set the surface speed factors for the bicycle type.
   if (type_ == BicycleType::kRoad) {
     surface_speed_factor_ = kRoadSurfaceSpeedFactors;
@@ -667,16 +667,16 @@ Cost BicycleCost::EdgeCost(const baldr::DirectedEdge* edge,
     accommodation_factor += sidepath_factor_;
   }
 
-  // Favor bicycle networks slightly
-  if (!edge->bike_network()) {
-    accommodation_factor *= non_network_factor_;
-  }
-
   // Create an edge factor based on total stress (sum of accommodation factor and roadway
   // stress) and the weighted grade penalty for the edge.
   float factor =
       1.0f + grade_penalty[edge->weighted_grade()] + (accommodation_factor * roadway_stress);
 
+  // Favor bicycle networks slightly
+  if (!edge->bike_network()) {
+    factor += non_network_factor_;
+  }
+  
   // If surface is worse than the minimum we add a surface factor
   if (edge->surface() >= minimal_surface_penalized_) {
     factor +=
