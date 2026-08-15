@@ -1,13 +1,12 @@
 #pragma once
 
-#include <chrono>
-
 #include <valhalla/baldr/datetime.h>
-#include <valhalla/baldr/graphconstants.h>
 #include <valhalla/baldr/graphid.h>
 #include <valhalla/baldr/graphreader.h>
 #include <valhalla/midgard/logging.h>
-#include <valhalla/proto/api.pb.h>
+#include <valhalla/proto/common.pb.h>
+
+#include <chrono>
 
 namespace dt = valhalla::baldr::DateTime;
 namespace sc = std::chrono;
@@ -179,7 +178,6 @@ struct TimeInfo {
       namespace dt = baldr::DateTime;
       int tz_diff = dt::timezone_diff(lt, dt::get_tz_db().from_index(timezone_index),
                                       dt::get_tz_db().from_index(next_tz_index), tz_cache);
-      lt += tz_diff;
       sw += tz_diff;
     }
 
@@ -226,7 +224,6 @@ struct TimeInfo {
       namespace dt = baldr::DateTime;
       int tz_diff = dt::timezone_diff(lt, dt::get_tz_db().from_index(timezone_index),
                                       dt::get_tz_db().from_index(next_tz_index), tz_cache);
-      lt += tz_diff;
       sw += tz_diff;
     }
 

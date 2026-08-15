@@ -1,21 +1,22 @@
-#include <cmath>
-#include <filesystem>
+#include "baldr/rapidjson_utils.h"
+#include "gurka.h"
+#include "midgard/pointll.h"
+
+#include <gtest/gtest.h>
+
+#ifndef _WIN32
 #include <sys/mman.h>
+#endif
+
 #include <sys/stat.h>
 
-#include "gurka.h"
-#include "loki/worker.h"
-#include "microtar.h"
-#include "mjolnir/adminbuilder.h"
-#include "test/test.h"
-
-#include <valhalla/baldr/graphreader.h>
-#include <valhalla/baldr/traffictile.h>
+#include <cmath>
+#include <filesystem>
 
 using namespace valhalla;
 using namespace valhalla::baldr;
 using namespace valhalla::gurka;
-using namespace valhalla::mjolnir;
+using namespace valhalla::midgard;
 
 TEST(TestRouteSummary, GetSummary) {
   const std::string ascii_map = R"(
@@ -265,6 +266,11 @@ TEST(Standalone, TripLegSummary) {
   EXPECT_TRUE(summary["has_highway"].GetBool());
   EXPECT_TRUE(summary["has_toll"].GetBool());
   EXPECT_TRUE(summary["has_ferry"].GetBool());
+
+  auto leg_none = trip["legs"].GetArray()[0]["summary"].GetObject();
+  EXPECT_TRUE(leg_none["has_highway"].GetBool());
+  EXPECT_TRUE(leg_none["has_toll"].GetBool());
+  EXPECT_TRUE(leg_none["has_ferry"].GetBool());
   result_json.erase();
 
   valhalla::Api result4 = gurka::do_action(valhalla::Options::route, map, {"A", "D"}, "auto",
@@ -280,6 +286,11 @@ TEST(Standalone, TripLegSummary) {
   EXPECT_TRUE(summary["has_highway"].GetBool());
   EXPECT_TRUE(summary["has_toll"].GetBool());
   EXPECT_TRUE(summary["has_ferry"].GetBool());
+
+  auto leg_maneuvers = trip["legs"].GetArray()[0]["summary"].GetObject();
+  EXPECT_TRUE(leg_maneuvers["has_highway"].GetBool());
+  EXPECT_TRUE(leg_maneuvers["has_toll"].GetBool());
+  EXPECT_TRUE(leg_maneuvers["has_ferry"].GetBool());
 
   std::filesystem::remove_all(workdir);
 }
