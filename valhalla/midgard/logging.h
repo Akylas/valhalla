@@ -3,8 +3,8 @@
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
-#include <format>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -16,15 +16,31 @@ namespace logging {
 
 // Helper to handle both old string concatenation and new format strings
 namespace detail {
-// If no additional arguments, just pass the string through (backward compatibility)
-// TODO: remove this once we have fully migrated all calls of logging macros
-inline std::string format_or_pass(const std::string& msg) {
-  return msg;
+// CARTOHACK: upstream uses std::format here, which Apple's libc++ gates behind an
+// iOS 16.3 availability annotation (std::to_chars for floating point). This shim only
+// substitutes plain "{}" — every log call in the tree uses that form.
+// TODO: drop this and restore std::format once the iOS deployment target reaches 16.3.
+inline void format_append(std::ostringstream& out, std::string_view fmt_str) {
+  out << fmt_str;
 }
-// If additional arguments exist, use std::format
+
+template <typename Arg, typename... Rest>
+inline void
+format_append(std::ostringstream& out, std::string_view fmt_str, Arg&& arg, Rest&&... rest) {
+  const auto pos = fmt_str.find("{}");
+  if (pos == std::string_view::npos) {
+    out << fmt_str;
+    return;
+  }
+  out << fmt_str.substr(0, pos) << std::forward<Arg>(arg);
+  format_append(out, fmt_str.substr(pos + 2), std::forward<Rest>(rest)...);
+}
+
 template <typename... Args>
-inline std::string format_or_pass(std::format_string<Args...> fmt_str, Args&&... args) {
-  return std::format(fmt_str, std::forward<Args>(args)...);
+inline std::string format_or_pass(std::string_view fmt_str, Args&&... args) {
+  std::ostringstream out;
+  format_append(out, fmt_str, std::forward<Args>(args)...);
+  return out.str();
 }
 } // namespace detail
 

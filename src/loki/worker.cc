@@ -7,7 +7,6 @@
 #include <boost/property_tree/ptree.hpp>
 
 #include <cstdint>
-#include <format>
 #include <functional>
 #include <stdexcept>
 #include <string>
@@ -274,15 +273,16 @@ loki_worker_t::loki_worker_t(const boost::property_tree::ptree& config,
     ++i;
   }
   if (i != max_road_classes) {
-    throw std::runtime_error(
-        std::format("mvt_min_zoom_road_class out of bounds, expected {} elements but got {}",
-                    max_road_classes, i));
+    // CARTOHACK: std::format needs iOS 16.3, see valhalla/midgard/logging.h
+    throw std::runtime_error("mvt_min_zoom_road_class out of bounds, expected " +
+                             std::to_string(max_road_classes) + " elements but got " +
+                             std::to_string(i));
   }
 
   mvt_headers.emplace_back("Cache-Control",
-                           std::format("public, max-age={}",
-                                       config.get<std::string>("loki.service_defaults.mvt_max_age",
-                                                               kDefaultMaxAge.data())));
+                           "public, max-age=" +
+                               config.get<std::string>("loki.service_defaults.mvt_max_age",
+                                                       kDefaultMaxAge.data()));
 
   // Build max_locations and max_distance maps
   for (const auto& kv : config.get_child("service_limits")) {

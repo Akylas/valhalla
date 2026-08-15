@@ -18,8 +18,20 @@
 namespace {
 
 // append current timestamp formatted as: "year-mo-dy hr:mn:sc.xxxxxxxxx"
+// CARTOHACK: std::format_to with chrono needs iOS 16.3, see valhalla/midgard/logging.h
 void append_timestamp(std::string& buffer) {
-  std::format_to(std::back_inserter(buffer), "{0:%F} {0:%T}", std::chrono::system_clock::now());
+  const auto now = std::chrono::system_clock::now();
+  const auto secs = std::chrono::system_clock::to_time_t(now);
+  const auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         now - std::chrono::system_clock::from_time_t(secs))
+                         .count();
+  struct tm gmt {};
+  gmtime_r(&secs, &gmt);
+  char date[32];
+  strftime(date, sizeof(date), "%F %T", &gmt);
+  char stamp[64];
+  snprintf(stamp, sizeof(stamp), "%s.%09lld", date, static_cast<long long>(nanos));
+  buffer += stamp;
 }
 
 // the Log levels we support
