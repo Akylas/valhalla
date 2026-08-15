@@ -1,13 +1,12 @@
 #include "sif/transitcost.h"
-#include "baldr/accessrestriction.h"
 #include "baldr/graphconstants.h"
-#include "midgard/constants.h"
-#include "midgard/logging.h"
+#include "baldr/rapidjson_utils.h"
 #include "proto_conversions.h"
-#include "worker.h"
 
 #ifdef INLINE_TEST
 #include "test.h"
+#include "worker.h"
+
 #include <random>
 #endif
 
@@ -38,9 +37,6 @@ constexpr float kDefaultUseRail = 0.6f;
 constexpr float kDefaultUseTransfers = 0.3f;
 
 Cost kImpossibleCost = {10000000.0f, 10000000.0f};
-
-constexpr float kMinFactor = 0.1f;
-constexpr float kMaxFactor = 100000.0f;
 
 // Valid ranges and defaults
 constexpr ranged_default_t<float> kModeFactorRange{kMinFactor, kModeFactor, kMaxFactor};
@@ -113,7 +109,8 @@ public:
                        const baldr::GraphId& edgeid,
                        const uint64_t current_time,
                        const uint32_t tz_index,
-                       uint8_t& restriction_idx) const override;
+                       uint8_t& restriction_idx,
+                       uint8_t& /*destonly_access_restr_mask*/) const override;
 
   /**
    * Checks if access is allowed for an edge on the reverse path
@@ -139,7 +136,8 @@ public:
                               const baldr::GraphId& opp_edgeid,
                               const uint64_t current_time,
                               const uint32_t tz_index,
-                              uint8_t& restriction_idx) const override;
+                              uint8_t& restriction_idx,
+                              uint8_t& /*destonly_access_restr_mask*/) const override;
 
   /**
    * Checks if access is allowed for the provided node. Node access can
@@ -170,6 +168,7 @@ public:
    * @return
    */
   virtual Cost EdgeCost(const baldr::DirectedEdge*,
+                        const baldr::GraphId&,
                         const graph_tile_ptr&,
                         const baldr::TimeInfo&,
                         uint8_t&) const override {
@@ -184,14 +183,19 @@ public:
    * Returns the cost to make the transition from the predecessor edge.
    * Defaults to 0. Costing models that wish to include edge transition
    * costs (i.e., intersection/turn costs) must override this method.
-   * @param  edge  Directed edge (the to edge)
-   * @param  node  Node (intersection) where transition occurs.
-   * @param  pred  Predecessor edge information.
-   * @return  Returns the cost and time (seconds)
+   * @param  edge          Directed edge (the to edge)
+   * @param  node          Node (intersection) where transition occurs.
+   * @param  pred          Predecessor edge information.
+   * @param  tile          Pointer to the graph tile containing the to edge.
+   * @param  reader_getter Functor that facilitates access to a limited version of the graph reader
+   * @return Returns the cost and time (seconds)
    */
-  virtual Cost TransitionCost(const baldr::DirectedEdge* edge,
-                              const baldr::NodeInfo* node,
-                              const EdgeLabel& pred) const override;
+  virtual Cost
+  TransitionCost(const baldr::DirectedEdge* edge,
+                 const baldr::NodeInfo* node,
+                 const EdgeLabel& pred,
+                 const graph_tile_ptr& tile,
+                 const std::function<baldr::LimitedGraphReader()>& reader_getter) const override;
 
   /**
    * Returns the transfer cost between 2 transit stops.
@@ -520,6 +524,7 @@ bool TransitCost::Allowed(const baldr::DirectedEdge* edge,
                           const baldr::GraphId&,
                           const uint64_t,
                           const uint32_t,
+                          uint8_t&,
                           uint8_t&) const {
   // TODO - obtain and check the access restrictions.
 
@@ -551,6 +556,7 @@ bool TransitCost::AllowedReverse(const baldr::DirectedEdge*,
                                  const baldr::GraphId&,
                                  const uint64_t,
                                  const uint32_t,
+                                 uint8_t&,
                                  uint8_t&) const {
   // This method should not be called since time based routes do not use
   // bidirectional A*
@@ -583,9 +589,12 @@ Cost TransitCost::EdgeCost(const baldr::DirectedEdge* edge,
 }
 
 // Returns the time (in seconds) to make the transition from the predecessor
-Cost TransitCost::TransitionCost(const baldr::DirectedEdge* edge,
-                                 const baldr::NodeInfo*,
-                                 const EdgeLabel& pred) const {
+Cost TransitCost::TransitionCost(
+    const baldr::DirectedEdge* edge,
+    const baldr::NodeInfo* /*node*/,
+    const EdgeLabel& pred,
+    const graph_tile_ptr& /*tile*/,
+    const std::function<baldr::LimitedGraphReader()>& /*reader_getter*/) const {
   if (pred.mode() == TravelMode::kPedestrian) {
     // Apply any mode-based penalties when boarding transit
     // Do we want any time cost to board?
@@ -626,7 +635,8 @@ uint32_t TransitCost::UnitSize() const {
 
 void ParseTransitCostOptions(const rapidjson::Document& doc,
                              const std::string& costing_options_key,
-                             Costing* c) {
+                             Costing* c,
+                             google::protobuf::RepeatedPtrField<CodedDescription>& warnings) {
   c->set_type(Costing::transit);
   c->set_name(Costing_Enum_Name(c->type()));
   auto* co = c->mutable_options();
@@ -636,14 +646,15 @@ void ParseTransitCostOptions(const rapidjson::Document& doc,
 
   // TODO: no base costing parsing because transit doesnt care about any of those options?
 
-  JSON_PBF_RANGED_DEFAULT(co, kModeFactorRange, json, "/mode_factor", mode_factor);
-  JSON_PBF_DEFAULT(co, false, json, "/wheelchair", wheelchair);
-  JSON_PBF_DEFAULT(co, false, json, "/bicycle", bicycle);
-  JSON_PBF_RANGED_DEFAULT(co, kUseBusRange, json, "/use_bus", use_bus);
-  JSON_PBF_RANGED_DEFAULT(co, kUseRailRange, json, "/use_rail", use_rail);
-  JSON_PBF_RANGED_DEFAULT(co, kUseTransfersRange, json, "/use_transfers", use_transfers);
-  JSON_PBF_RANGED_DEFAULT(co, kTransferCostRange, json, "/transfer_cost", transfer_cost);
-  JSON_PBF_RANGED_DEFAULT(co, kTransferPenaltyRange, json, "/transfer_penalty", transfer_penalty);
+  JSON_PBF_RANGED_DEFAULT(co, kModeFactorRange, json, "/mode_factor", mode_factor, warnings);
+  JSON_PBF_DEFAULT_V2(co, false, json, "/wheelchair", wheelchair);
+  JSON_PBF_DEFAULT_V2(co, false, json, "/bicycle", bicycle);
+  JSON_PBF_RANGED_DEFAULT(co, kUseBusRange, json, "/use_bus", use_bus, warnings);
+  JSON_PBF_RANGED_DEFAULT(co, kUseRailRange, json, "/use_rail", use_rail, warnings);
+  JSON_PBF_RANGED_DEFAULT(co, kUseTransfersRange, json, "/use_transfers", use_transfers, warnings);
+  JSON_PBF_RANGED_DEFAULT(co, kTransferCostRange, json, "/transfer_cost", transfer_cost, warnings);
+  JSON_PBF_RANGED_DEFAULT(co, kTransferPenaltyRange, json, "/transfer_penalty", transfer_penalty,
+                          warnings);
 
   // filter_stop_action
   auto filter_stop_action_str = rapidjson::get_optional<std::string>(json, "/filters/stops/action");
@@ -783,10 +794,5 @@ TEST(TransitCost, testTransitCostParams) {
   }
 }
 } // namespace
-
-int main(int argc, char* argv[]) {
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
 
 #endif

@@ -1,26 +1,27 @@
 #include "skadi/sample.h"
+#include "baldr/compression_utils.h"
+#include "filesystem_utils.h"
+#include "midgard/logging.h"
+#include "midgard/pointll.h"
+#include "midgard/sequence.h"
+#include "midgard/util.h"
+#include "valhalla/baldr/curl_tilegetter.h"
+
+#include <boost/property_tree/ptree.hpp>
+#ifdef ENABLE_LZ4
+#include <lz4frame.h>
+#endif
+#include <sys/stat.h>
 
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <future>
 #include <list>
 #include <optional>
 #include <regex>
 #include <unordered_map>
 #include <unordered_set>
-
-#include <boost/optional.hpp>
-// CARTOHACK
-//#include <lz4frame.h>
-#include <sys/stat.h>
-
-#include "baldr/compression_utils.h"
-#include "filesystem.h"
-#include "midgard/logging.h"
-#include "midgard/pointll.h"
-#include "midgard/sequence.h"
-// CARTOHACK
-//#include "valhalla/baldr/curl_tilegetter.h"
 
 namespace {
 // srtmgl1 holds 1x1 degree tiles but oversamples the edge of the tile
@@ -133,6 +134,7 @@ public:
         return false;
       }
     } else if (format == format_t::LZ4) {
+#ifdef ENABLE_LZ4
       LZ4F_decompressionContext_t decode;
       LZ4F_decompressOptions_t options;
       LZ4F_createDecompressionContext(&decode, LZ4F_VERSION);
@@ -154,6 +156,11 @@ public:
       } while (result != 0);
 
       LZ4F_freeDecompressionContext(decode);
+#else
+      LOG_WARN("LZ4 elevation data found but LZ4 support is not compiled in");
+      format = format_t::UNKNOWN;
+      return false;
+#endif
     } else {
       LOG_WARN("Corrupt elevation data of unknown type");
       format = format_t::UNKNOWN;
@@ -181,8 +188,8 @@ public:
         fmt = format_t::RAW;
       }
 
-      auto lon = std::stoi(m[4]) * (m[3] == "E" ? 1 : -1) + 180;
-      auto lat = std::stoi(m[2]) * (m[1] == "N" ? 1 : -1) + 90;
+      auto lon = valhalla::midgard::to_int(m[4].str()) * (m[3] == "E" ? 1 : -1) + 180;
+      auto lat = valhalla::midgard::to_int(m[2].str()) * (m[1] == "N" ? 1 : -1) + 90;
       if (lon >= 0 && lon < 360 && lat >= 0 && lat < 180) {
         return std::make_pair(uint16_t(lat * 360 + lon), fmt);
       }
@@ -211,7 +218,7 @@ public:
   ~tile_data();
   tile_data& operator=(const tile_data& other);
 
-  tile_data& operator=(tile_data&& other) {
+  tile_data& operator=(tile_data&& other) noexcept {
     std::swap(c, other.c);
     std::swap(data, other.data);
     std::swap(index, other.index);
@@ -335,8 +342,12 @@ tile_data cache_t::source(uint16_t index) {
   // if we don't have anything maybe it's lazy loaded
   auto& item = cache[index];
   if (item.get_data() == nullptr) {
-    auto f = data_source + get_hgt_file_name(index);
-    item.init(f, format_t::RAW);
+    mutex.lock();
+    if (item.get_data() == nullptr) {
+      auto f = data_source + get_hgt_file_name(index);
+      item.init(f, format_t::RAW);
+    }
+    mutex.unlock();
   }
 
   // it wasn't in cache and when we tried to load it the file was of unknown type
@@ -431,10 +442,10 @@ sample::sample(const boost::property_tree::ptree& pt)
   url_ = pt.get<std::string>("additional_data.elevation_url", "");
 
   auto max_concurrent_users = pt.get<size_t>("mjolnir.max_concurrent_reader_users", 1);
-  remote_loader_ =
-      std::make_unique<baldr::curl_tile_getter_t>(max_concurrent_users,
-                                                  pt.get<std::string>("mjolnir.user_agent", ""),
-                                                  false);
+  remote_loader_ = std::make_unique<
+      baldr::curl_tile_getter_t>(max_concurrent_users, pt.get<std::string>("mjolnir.user_agent", ""),
+                                 false,
+                                 pt.get<std::string>("additional_data.elevation_url_user_pw", ""));
 
   // this line used only for testing, for more details check elevation_builder.cc
   remote_path_ = pt.get<std::string>("additional_data.elevation_dir", "");
@@ -454,8 +465,35 @@ sample::~sample() {
 }
 
 template <class coord_t> double sample::get(const coord_t& coord, tile_data& tile) {
-  // CARTOHACK
+  // CARTOHACK: no elevation data on mobile
   return NO_DATA_VALUE;
+  /*
+  // check the cache and load
+  auto lon = std::floor(coord.first);
+  auto lat = std::floor(coord.second);
+  auto index = static_cast<uint16_t>(lat + 90) * 360 + static_cast<uint16_t>(lon + 180);
+
+  // the caller can pass a cached tile, so we only fetch one if its not the one they already have
+  if (index != tile.get_index()) {
+    tile = cache_->source(index);
+    if (!tile) {
+      if (!fetch(index))
+        return get_no_data_value();
+
+      if (!(tile = cache_->source(index)))
+        return get_no_data_value();
+    }
+  }
+
+  // figure out what row and column we need from the array of data
+  // NOTE: data is arranged from upper left to bottom right, so y is flipped
+
+  // fractional pixel
+  double u = (coord.first - lon) * (HGT_DIM - 1);
+  double v = (1.0 - (coord.second - lat)) * (HGT_DIM - 1);
+
+  return tile.get(u, v);
+  */
 }
 
 template <class coord_t> double sample::get(const coord_t& coord) {
@@ -481,8 +519,9 @@ bool sample::store(const std::string& elev, const std::vector<char>& raw_data) {
   // CARTOHACK
 /*
   // data_source never changes so we do not lock it. it is set only in sample constructor
-  auto fpath = cache_->data_source + elev;
-  if (filesystem::exists(fpath))
+
+  std::filesystem::path fpath{cache_->data_source + elev};
+  if (std::filesystem::exists(fpath))
     return true;
 
   auto data = cache_item_t::parse_hgt_name(elev);
@@ -494,13 +533,13 @@ bool sample::store(const std::string& elev, const std::vector<char>& raw_data) {
     return false;
 
   // thread-safe by implementation
-  if (!filesystem::save(fpath, raw_data))
+  if (!filesystem_utils::save(fpath, raw_data))
     return false;
 
   std::lock_guard<std::mutex> _(cache_lck);
-  return cache_->insert(data->first, fpath, data->second);
+  return cache_->insert(data->first, fpath.string(), data->second);
   */
-return false;
+  return false;
 }
 
 bool sample::fetch(uint16_t index) {
@@ -610,25 +649,30 @@ void sample::cache_initialisation(const std::string& data_source) {
 
   // messy but needed
   while (cache_->data_source.size() &&
-         cache_->data_source.back() == filesystem::path::preferred_separator) {
+         cache_->data_source.back() == std::filesystem::path::preferred_separator) {
     cache_->data_source.pop_back();
-  }
-
-  // If data_source is empty, do not allocate/resize mapped cache.
-  if (cache_->data_source.empty()) {
-    LOG_DEBUG("No elevation data_source was provided");
-    return;
   }
   cache_->cache.resize(TILE_COUNT);
 
+  const auto data_path = std::filesystem::path{cache_->data_source};
+
+  // If data_source is empty, do not allocate/resize mapped cache.
+  if (cache_->data_source.empty() || !std::filesystem::is_directory(data_path)) {
+    LOG_DEBUG("No elevation data_source was provided");
+    return;
+  }
+
   // check the directory for files that look like what we need
-  auto files = filesystem::get_files(cache_->data_source);
-  for (const auto& f : files) {
+  for (const auto& f : std::filesystem::recursive_directory_iterator(cache_->data_source)) {
+    if (!f.is_regular_file())
+      continue;
     // make sure its a valid index
-    auto data = cache_item_t::parse_hgt_name(f);
+    // TODO(nils): make this all based on filesystem::path instead of string
+    const auto fp_str = f.path().string();
+    auto data = cache_item_t::parse_hgt_name(fp_str);
     if (data && data->second != format_t::UNKNOWN) {
-      if (!cache_->insert(data->first, f, data->second)) {
-        LOG_WARN("Corrupt elevation data: " + f);
+      if (!cache_->insert(data->first, fp_str, data->second)) {
+        LOG_WARN("Corrupt elevation data: " + fp_str);
       }
     }
   }

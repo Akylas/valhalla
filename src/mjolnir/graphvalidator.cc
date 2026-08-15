@@ -1,20 +1,4 @@
 #include "mjolnir/graphvalidator.h"
-#include "mjolnir/graphtilebuilder.h"
-#include "mjolnir/util.h"
-
-#include <boost/format.hpp>
-#include <future>
-#include <list>
-#include <mutex>
-#include <numeric>
-#include <random>
-#include <set>
-#include <string>
-#include <thread>
-#include <tuple>
-#include <utility>
-#include <vector>
-
 #include "baldr/graphconstants.h"
 #include "baldr/graphid.h"
 #include "baldr/graphreader.h"
@@ -23,6 +7,25 @@
 #include "midgard/distanceapproximator.h"
 #include "midgard/logging.h"
 #include "midgard/pointll.h"
+#include "mjolnir/graphtilebuilder.h"
+#include "mjolnir/util.h"
+#include "scoped_timer.h"
+
+#include <boost/format.hpp>
+#include <boost/property_tree/ptree.hpp>
+
+#include <algorithm>
+#include <deque>
+#include <future>
+#include <list>
+#include <mutex>
+#include <random>
+#include <set>
+#include <string>
+#include <thread>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace valhalla::midgard;
 using namespace valhalla::baldr;
@@ -38,6 +41,13 @@ struct HGVRestrictionTypes {
   bool weight;
   bool width;
 };
+
+// Custom comparator to sort by GraphId (level desc, tile_id asc, id asc)
+inline bool graphid_less(GraphId a, GraphId b) {
+  return ((a.level() > b.level()) ||
+          ((a.level() == b.level()) &&
+           ((a.tileid() < b.tileid()) || ((a.tileid() == b.tileid()) && (a.id() < b.id())))));
+}
 
 // Get the GraphId of the opposing edge.
 uint32_t GetOpposingEdgeIndex(const GraphId& startnode,
@@ -199,6 +209,7 @@ uint32_t GetOpposingEdgeIndex(const GraphId& startnode,
                std::to_string(nodeinfo->stop_index()) + " has " +
                std::to_string(nodeinfo->edge_count())); */
     } else if (startnode.level() != transit_level) {
+#ifdef LOGGING_LEVEL_ERROR
       PointLL ll = end_tile->get_node_ll(endnode);
       if (edge.is_shortcut()) {
         LOG_ERROR(
@@ -213,6 +224,7 @@ uint32_t GetOpposingEdgeIndex(const GraphId& startnode,
                    edge.edgeinfo_offset())
                       .str());
       }
+#endif
 
       uint32_t n = 0;
       directededge = end_tile->directededge(nodeinfo->edge_index());
@@ -254,6 +266,11 @@ void validate(
   // Get some things we need throughout
   auto numLevels = TileHierarchy::levels().size() + 1; // To account for transit
   auto transit_level = TileHierarchy::GetTransitLevel().level;
+
+  // default to false if the config does not contain any value
+  // TODO(chris): enable this line once bounding circle computation is
+  // finalized
+  bool build_bounding_circles = pt.get<bool>("mjolnir.data_processing.build_bounding_circles", true);
 
   // vector to hold densities for each level
   std::vector<std::vector<float>> densities(numLevels);
@@ -340,8 +357,8 @@ void validate(
         uint32_t ar_modes = de->access_restriction();
         if (ar_modes) {
           // since only truck restrictions exist, we can still get all restrictions
-          auto res = tile->GetAccessRestrictions(idx, kAllAccess);
-          if (res.size() == 0) {
+          auto res = tile->GetAccessRestrictions(idx).first;
+          if (res.empty()) {
             LOG_ERROR(
                 "Directed edge marked as having access restriction but none found ; tile level = " +
                 std::to_string(tile_id.level()));
@@ -364,7 +381,7 @@ void validate(
 
         // Check if end node is in a different tile
         graph_tile_ptr endnode_tile = tile;
-        if (tile_id != directededge.endnode().Tile_Base()) {
+        if (tile_id != directededge.endnode().tile_base()) {
           directededge.set_leaves_tile(true);
 
           // Get the end node tile
@@ -403,7 +420,7 @@ void validate(
           uint32_t modes = 0;
           for (uint32_t mode = 1; mode < kAllAccess; mode *= 2) {
             if ((de->end_restriction() & mode) &&
-                tile->GetRestrictions(true, edgeid, mode).size() > 0) {
+                !tile->GetComplexRestrictions(true, edgeid, mode).empty()) {
               modes |= mode;
             }
           }
@@ -413,7 +430,7 @@ void validate(
           uint32_t modes = 0;
           for (uint32_t mode = 1; mode < kAllAccess; mode *= 2) {
             if ((de->start_restriction() & mode) &&
-                tile->GetRestrictions(false, edgeid, mode).size() > 0) {
+                !tile->GetComplexRestrictions(false, edgeid, mode).empty()) {
               modes |= mode;
             }
           }
@@ -448,7 +465,7 @@ void validate(
     tilebuilder.header_builder().set_density(relative_density);
 
     // Bin the edges
-    auto bins = GraphTileBuilder::BinEdges(tile, tweeners);
+    auto bins = GraphTileBuilder::BinEdges(tile, tweeners, build_bounding_circles);
 
     // Write the new tile
     lock.lock();
@@ -457,7 +474,16 @@ void validate(
     // Write the bins to it
     if (tile->header()->graphid().level() == TileHierarchy::levels().back().level) {
       auto reloaded = GraphTile::Create(graph_reader.tile_dir(), tile_id);
-      GraphTileBuilder::AddBins(graph_reader.tile_dir(), reloaded, bins);
+      // Sort bins using a custom comparator in each vector of the array to make tile generation
+      // deterministic
+      for (auto& bin : bins) {
+        std::sort(bin.begin(), bin.end(),
+                  [](std::pair<GraphId, DiscretizedBoundingCircle>& a,
+                     std::pair<GraphId, DiscretizedBoundingCircle>& b) {
+                    return graphid_less(a.first, b.first);
+                  });
+      }
+      GraphTileBuilder::AddBins(graph_reader.tile_dir(), reloaded, bins, build_bounding_circles);
     }
 
     // Check if we need to clear the tile cache
@@ -465,6 +491,9 @@ void validate(
       graph_reader.Trim();
     }
     lock.unlock();
+
+    build_stats::get().increment(build_stats::kCountNodes, nodes.size());
+    build_stats::get().increment(build_stats::kCountEdges, directededges.size());
 
     // Add possible duplicates to return class
     duplicates[level] += dupcount;
@@ -501,7 +530,8 @@ void bin_tweeners(const std::string& tile_dir,
                   tweeners_t::iterator& start,
                   const tweeners_t::iterator& end,
                   uint64_t dataset_id,
-                  std::mutex& lock) {
+                  std::mutex& lock,
+                  bool build_bounding_circles) {
   // go while we have tiles to update
   while (true) {
     lock.lock();
@@ -510,7 +540,7 @@ void bin_tweeners(const std::string& tile_dir,
       break;
     }
     // grab this tile and its extra bin edges
-    const auto& tile_bin = *start;
+    auto& tile_bin = *start;
     ++start;
     lock.unlock();
 
@@ -524,8 +554,18 @@ void bin_tweeners(const std::string& tile_dir,
       tile = GraphTile::Create(tile_dir, tile_bin.first);
     }
 
+    // Sort bins using a custom comparator in each vector of the array to make tile generation
+    // deterministic
+    for (auto& bin : tile_bin.second) {
+      std::sort(bin.begin(), bin.end(),
+                [](std::pair<GraphId, DiscretizedBoundingCircle>& a,
+                   std::pair<GraphId, DiscretizedBoundingCircle>& b) {
+                  return graphid_less(a.first, b.first);
+                });
+    }
+
     // keep the extra binned edges
-    GraphTileBuilder::AddBins(tile_dir, tile, tile_bin.second);
+    GraphTileBuilder::AddBins(tile_dir, tile, tile_bin.second, build_bounding_circles);
   }
 }
 } // namespace
@@ -534,9 +574,13 @@ namespace valhalla {
 namespace mjolnir {
 
 void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
+  SCOPED_TIMER();
   LOG_INFO("Validating, finishing and binning tiles...");
   auto hierarchy_properties = pt.get_child("mjolnir");
   std::string tile_dir = hierarchy_properties.get<std::string>("tile_dir");
+  // TODO(chris): enable this line once bounding circle computation is
+  // finalized
+  bool build_bounding_circles = pt.get<bool>("mjolnir.data_processing.build_bounding_circles", true);
 
   // Create a randomized queue of tiles (at all levels) to work from
   std::deque<GraphId> tilequeue;
@@ -545,6 +589,9 @@ void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
   for (const auto& id : tileset) {
     tilequeue.emplace_back(id);
   }
+  // log before creating empty tiles
+  build_stats::get().increment(build_stats::kCountTiles, tilequeue.size());
+
   // fixed seed for reproducible tile build
   std::shuffle(tilequeue.begin(), tilequeue.end(), std::mt19937(3));
 
@@ -569,8 +616,8 @@ void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
   // Spawn the threads
   for (auto& thread : threads) {
     results.emplace_back();
-    thread.reset(new std::thread(validate, std::cref(pt), std::ref(tilequeue), std::ref(lock),
-                                 std::ref(results.back())));
+    thread = std::make_shared<std::thread>(validate, std::cref(pt), std::ref(tilequeue),
+                                           std::ref(lock), std::ref(results.back()));
   }
 
   // Wait for threads to finish
@@ -600,8 +647,9 @@ void GraphValidator::Validate(const boost::property_tree::ptree& pt) {
   auto start = tweeners.begin();
   auto end = tweeners.end();
   for (auto& thread : threads) {
-    thread.reset(new std::thread(bin_tweeners, std::cref(tile_dir), std::ref(start), std::cref(end),
-                                 dataset_id, std::ref(lock)));
+    thread = std::make_shared<std::thread>(bin_tweeners, std::cref(tile_dir), std::ref(start),
+                                           std::cref(end), dataset_id, std::ref(lock),
+                                           build_bounding_circles);
   }
   for (auto& thread : threads) {
     thread->join();

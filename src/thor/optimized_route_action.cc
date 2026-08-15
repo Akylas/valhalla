@@ -1,9 +1,3 @@
-#include "midgard/constants.h"
-#include "midgard/logging.h"
-#include "midgard/util.h"
-#include "sif/autocost.h"
-#include "sif/bicyclecost.h"
-#include "sif/pedestriancost.h"
 #include "thor/costmatrix.h"
 #include "thor/optimizer.h"
 #include "thor/worker.h"
@@ -22,15 +16,15 @@ void thor_worker_t::optimized_route(Api& request) {
   auto _ = measure_scope_time(request);
 
   auto& options = *request.mutable_options();
-  adjust_scores(options);
+  adjust_locations(request);
   auto costing = parse_costing(request);
   controller = AttributesController(options);
 
+  costmatrix_.set_interrupt(interrupt);
   // Use CostMatrix to find costs from each location to every other location
-  CostMatrix costmatrix;
-  costmatrix.set_has_time(check_matrix_time(request, Matrix::CostMatrix));
-  costmatrix.SourceToTarget(request, *reader, mode_costing, mode,
-                            max_matrix_distance.find(costing)->second);
+  costmatrix_.set_has_time(check_matrix_time(request, Matrix::CostMatrix));
+  costmatrix_.SourceToTarget(request, *reader, mode_costing, mode,
+                             max_matrix_distance.find(costing)->second);
 
   // Return an error if any locations are totally unreachable
   const auto& correlated =
@@ -40,7 +34,7 @@ void thor_worker_t::optimized_route(Api& request) {
   std::vector<float> time_costs;
   bool reachable = true;
   const auto tds = request.matrix().times();
-  for (size_t i = 0; i < tds.size(); ++i) {
+  for (size_t i = 0; i < static_cast<size_t>(tds.size()); ++i) {
     // If any location is completely unreachable then we cant have a connected path
     if (i % correlated.size() == 0) {
       if (!reachable) {
@@ -54,6 +48,7 @@ void thor_worker_t::optimized_route(Api& request) {
   }
 
   Optimizer optimizer;
+  optimizer.set_interrupt(interrupt);
   // returns the optimal order of the path_locations
   auto optimal_order = optimizer.Solve(correlated.size(), time_costs);
   // put the optimal order into the locations array

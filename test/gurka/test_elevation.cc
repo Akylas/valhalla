@@ -1,13 +1,14 @@
+#include "baldr/json.h"
+#include "baldr/rapidjson_utils.h"
 #include "gurka.h"
+#include "midgard/pointll.h"
+#include "mjolnir/util.h"
 #include "test.h"
 
-#include "baldr/json.h"
-#include "loki/worker.h"
-#include "midgard/pointll.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-
-#include <gtest/gtest.h>
+#include <fstream>
 
 using namespace valhalla;
 using namespace valhalla::gurka;
@@ -68,6 +69,7 @@ TEST(Standalone, ElevationCompareToSkadi) {
       {"DH", {{"highway", "service"}, {"service", "alley"}}},
       {"HIJ", {{"highway", "secondary"}, {"name", "East Main Street"}}},
       {"EABC", {{"highway", "service"}, {"service", "driveway"}}},
+      {"T3U", {{"highway", "service"}}},
   };
 
   // Create our layout based on real world data.
@@ -96,9 +98,12 @@ TEST(Standalone, ElevationCompareToSkadi) {
   layout.insert({"Q", {-76.4957235, 40.6502434}});
   layout.insert({"R", {-76.4950865, 40.6501919}});
   layout.insert({"S", {-76.4944069, 40.6502916}});
+  layout.insert({"T", {-76.8, 40.2}});
+  layout.insert({"3", {-76.79, 40.21}});
+  layout.insert({"U", {-76.78, 40.22}});
 
   // create a fake elevation tile over the gurka map area
-  PointLL bottom_left(-77, 40), upper_right(-76, 41);
+  midgard::PointLL bottom_left(-77, 40), upper_right(-76, 41);
   auto corner_to_corner_dist = bottom_left.Distance(upper_right);
   // just a randomly chosen max height that will create reasonable changes in local elevation
   double max_height = 9000;
@@ -117,7 +122,7 @@ TEST(Standalone, ElevationCompareToSkadi) {
       double lon = (static_cast<double>(j) / 3601) - 77;
       double lat = (static_cast<double>(i) / 3601) + 40;
       // measure distance and use it to scale a max height range
-      auto dist_ratio = bottom_left.Distance(PointLL(lon, lat)) / corner_to_corner_dist;
+      auto dist_ratio = bottom_left.Distance(midgard::PointLL(lon, lat)) / corner_to_corner_dist;
       int16_t height = std::round(dist_ratio * max_height);
       // and set the height in the tile data (flipping to big endian to match the srtm spec)
       tile[i * 3601 + j] = ((height & 0xFF) << 8) | ((height >> 8) & 0xFF);
@@ -147,8 +152,48 @@ TEST(Standalone, ElevationCompareToSkadi) {
   pt.put("additional_data.elevation", workdir);
 
   std::vector<std::string> input_files = {pbf_filename};
-  build_tile_set(pt, input_files, mjolnir::BuildStage::kInitialize, mjolnir::BuildStage::kValidate,
-                 false);
+  build_tile_set(pt, input_files, mjolnir::BuildStage::kInitialize, mjolnir::BuildStage::kValidate);
+
+  for (const auto& waypoints : std::vector<std::vector<std::string>>{
+           {"T", "3", "U"},
+           {"U", "3", "T"},
+       }) {
+    SCOPED_TRACE(waypoints.front() + " through " + waypoints[1] + " to " + waypoints.back());
+
+    std::string through_json;
+    gurka::do_action(valhalla::Options::route, map, waypoints, "bicycle",
+                     {
+                         {"/locations/0/type", "break"},
+                         {"/locations/1/type", "through"},
+                         {"/locations/2/type", "break"},
+                         {"/elevation_interval", "30"},
+                     },
+                     {}, &through_json);
+
+    rapidjson::Document through_result;
+    through_result.Parse(through_json.c_str());
+    auto through_elevation = rapidjson::get_child_optional(through_result, "/trip/legs/0/elevation");
+    auto through_shape = rapidjson::get_child_optional(through_result, "/trip/legs/0/shape");
+
+    ASSERT_TRUE(through_elevation && through_elevation->IsArray());
+    ASSERT_TRUE(through_shape && through_shape->IsString());
+
+    std::string height_json;
+    std::string request = R"({"height_precision":1,"resample_distance":30,"encoded_polyline":")" +
+                          json_escape(through_shape->GetString()) + R"("})";
+    gurka::do_action(valhalla::Options::height, map, request, {}, &height_json);
+
+    rapidjson::Document height_result;
+    height_result.Parse(height_json.c_str());
+    auto height_elevation = rapidjson::get_child_optional(height_result, "/height");
+    ASSERT_TRUE(height_elevation && height_elevation->IsArray());
+
+    ASSERT_EQ(through_elevation->Size(), height_elevation->Size());
+
+    for (rapidjson::SizeType i = 0; i < through_elevation->Size(); ++i) {
+      EXPECT_NEAR((*through_elevation)[i].GetFloat(), (*height_elevation)[i].GetFloat(), 0.5f);
+    }
+  }
 
   // try a bunch of routes
   for (const auto& waypoints : std::vector<std::vector<std::string>>{
@@ -158,8 +203,9 @@ TEST(Standalone, ElevationCompareToSkadi) {
 
     // get a route with elevation included
     std::string route_json;
-    auto route = gurka::do_action(valhalla::Options::route, map, waypoints, "bicycle",
-                                  {{"/elevation_interval", "30"}}, {}, &route_json);
+    [[maybe_unused]] auto route =
+        gurka::do_action(valhalla::Options::route, map, waypoints, "bicycle",
+                         {{"/elevation_interval", "30"}}, {}, &route_json);
     rapidjson::Document result;
     result.Parse(route_json.c_str());
 
@@ -175,7 +221,8 @@ TEST(Standalone, ElevationCompareToSkadi) {
       std::string height_json;
       std::string request =
           R"({"height_precision":1,"resample_distance":30,"encoded_polyline":")" + shape + R"("})";
-      auto height = gurka::do_action(valhalla::Options::height, map, request, {}, &height_json);
+      [[maybe_unused]] auto height =
+          gurka::do_action(valhalla::Options::height, map, request, {}, &height_json);
 
       // pull out the elevation from the route result leg
       auto elevation =
@@ -213,7 +260,7 @@ TEST(Standalone, ElevationCompareToSkadi) {
            {"C", "N"},
        }) {
     std::string route_json;
-    auto route =
+    [[maybe_unused]] auto route =
         gurka::do_action(valhalla::Options::route, map, {"S", "F"}, "bicycle", {}, {}, &route_json);
     rapidjson::Document result;
     result.Parse(route_json.c_str());

@@ -1,18 +1,16 @@
 #ifndef VALHALLA_MJOLNIR_OSMDATA_H
 #define VALHALLA_MJOLNIR_OSMDATA_H
 
-#include <cstdint>
-#include <string>
-#include <unordered_set>
-
 #include <valhalla/baldr/conditional_speed_limit.h>
 #include <valhalla/mjolnir/osmaccessrestriction.h>
 #include <valhalla/mjolnir/osmlinguistic.h>
 #include <valhalla/mjolnir/osmnode.h>
-#include <valhalla/mjolnir/osmnodelinguistic.h>
 #include <valhalla/mjolnir/osmrestriction.h>
-#include <valhalla/mjolnir/osmway.h>
 #include <valhalla/mjolnir/uniquenames.h>
+
+#include <cstdint>
+#include <string>
+#include <unordered_set>
 
 namespace valhalla {
 namespace mjolnir {
@@ -27,11 +25,24 @@ struct OSMWayNode {
   uint32_t way_shape_node_index = 0;
 };
 
+// Structure to store OSM node information for BSS
+struct OSMBSSNode {
+  OSMNode node;
+  // Index with serialized `BikeShareStationInfo` within the node_names list
+  uint32_t bss_info_index;
+};
+
 // OSM bicycle data (stored within OSMData)
 struct OSMBike {
   uint8_t bike_network;
   uint32_t name_index;
   uint32_t ref_index;
+};
+
+// OSM area data (stored within OSMData)
+struct OSMAreaMember {
+  uint64_t way_id;
+  bool is_outer;
 };
 
 // OSM lane connectivity (stored within OSMData)
@@ -47,6 +58,7 @@ using RestrictionsMultiMap = std::unordered_multimap<uint64_t, OSMRestriction>;
 using ViaSet = std::unordered_set<uint64_t>;
 using AccessRestrictionsMultiMap = std::unordered_multimap<uint64_t, OSMAccessRestriction>;
 using BikeMultiMap = std::unordered_multimap<uint64_t, OSMBike>;
+using AreaMultiMap = std::unordered_multimap<uint64_t, OSMAreaMember>;
 using OSMLaneConnectivityMultiMap = std::unordered_multimap<uint64_t, OSMLaneConnectivity>;
 using LinguisticMultiMap = std::unordered_multimap<uint64_t, OSMLinguistic>;
 using ConditionalSpeedLimitsMultiMap =
@@ -113,6 +125,9 @@ struct OSMData {
 
   // Stores bike information from the relations.  Indexed by the way Id.
   BikeMultiMap bike_relations;
+
+  // Stores area information from the relations. Indexed by the relation Id.
+  AreaMultiMap area_relations;
 
   // Map that stores an updated ref for a way. This needs to remain a map, since relations
   // update many ways at a time (so we can't move this into OSMWay unless that is mapped by Id).

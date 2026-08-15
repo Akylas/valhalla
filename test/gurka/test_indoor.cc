@@ -1,7 +1,7 @@
+#include "baldr/rapidjson_utils.h"
 #include "gurka.h"
-#include "mjolnir/osmway.h"
 #include "test.h"
-#include <gmock/gmock.h>
+
 #include <gtest/gtest.h>
 
 #if !defined(VALHALLA_SOURCE_DIR)
@@ -9,7 +9,7 @@
 #endif
 
 using namespace valhalla;
-using namespace mjolnir;
+
 const std::unordered_map<std::string, std::string> build_config{{}};
 
 struct range_t {
@@ -18,6 +18,11 @@ struct range_t {
 
   float start;
   float end;
+};
+
+struct level_change_t {
+  uint32_t index;
+  float level;
 };
 
 class Indoor : public ::testing::Test {
@@ -30,19 +35,21 @@ protected:
     constexpr double gridsize_metres = 100;
 
     ascii_map = R"(
-              A
+              AzZ-Y-X-W
               |
               B
               |
-              C---------x--------y
-              |                  |
-    D----E----F----G----H----I---J
-    |         |
-    N         K
-    |         |
-    O         L
-              |
-              M
+              C---------x-------y
+              |                 |
+    D----E----F----G----H---I---J--S--T--U
+    |         |         |
+    N         K         |
+    |         |         |
+    O         L         P
+              |         |
+              M         |
+                        |
+                        Q
     )";
 
     const gurka::ways ways = {
@@ -69,11 +76,21 @@ protected:
         {"Cx", {{"highway", "steps"}, {"indoor", "yes"}, {"level", "-1;0-2"}}},
         {"xy", {{"highway", "steps"}, {"indoor", "yes"}, {"level", "2;3"}}},
         {"yJ", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+        {"JS", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+        {"ST", {{"highway", "steps"}, {"level", "3;4"}}},
+        {"TU", {{"highway", "footway"}, {"level", "4"}}},
+        {"AZ", {{"highway", "steps"}, {"indoor", "yes"}, {"level", "0-4"}}},
+        {"ZY", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "4"}}},
+        {"YX", {{"highway", "steps"}, {"indoor", "yes"}, {"level", "4;5"}}},
+        {"XW", {{"highway", "steps"}, {"indoor", "yes"}, {"level", "5"}}},
+        {"HP", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "2"}}},
+        {"PQ", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "17"}}},
     };
 
     const gurka::nodes nodes = {
         {"E", {{"entrance", "yes"}, {"indoor", "yes"}}},
         {"I", {{"highway", "elevator"}, {"indoor", "yes"}, {"level", "2;3"}}},
+        {"P", {{"highway", "elevator"}, {"indoor", "yes"}, {"level", "1-25"}}},
     };
 
     layout = gurka::detail::map_to_coordinates(ascii_map, gridsize_metres);
@@ -83,6 +100,24 @@ protected:
 gurka::map Indoor::map = {};
 std::string Indoor::ascii_map = {};
 gurka::nodelayout Indoor::layout = {};
+
+/**
+ * Convenience function to make sure that
+ *   a) the JSON response has a "level_changes" member and
+ *   b) that it indicates level changes as expected
+ */
+void check_level_changes(rapidjson::Document& doc, const std::vector<level_change_t>& expected) {
+  EXPECT_TRUE(doc["trip"]["legs"][0]["summary"].HasMember("level_changes"));
+  auto level_changes = doc["trip"]["legs"][0]["summary"]["level_changes"].GetArray();
+  EXPECT_EQ(level_changes.Size(), expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    auto expected_entry = expected[i];
+    auto change_entry = level_changes[i].GetArray();
+    EXPECT_EQ(change_entry.Size(), 2);
+    EXPECT_EQ(change_entry[0].GetUint64(), expected_entry.index);
+    EXPECT_EQ(change_entry[1].GetFloat(), expected_entry.level);
+  }
+}
 
 /*************************************************************/
 
@@ -167,8 +202,10 @@ TEST_F(Indoor, ElevatorManeuver) {
   // Verify elevator as a node instructions
   maneuver_index += 2;
   gurka::assert::raw::expect_instructions_at_maneuver_index(result, maneuver_index,
-                                                            "Take the elevator to Level 3.", "", "",
-                                                            "", "");
+                                                            "Take the elevator to Level 3.", "",
+                                                            "Take the elevator to Level 3.",
+                                                            "Take the elevator to Level 3.",
+                                                            "Continue for 400 meters.");
 }
 
 TEST_F(Indoor, IndoorStepsManeuver) {
@@ -184,8 +221,10 @@ TEST_F(Indoor, IndoorStepsManeuver) {
   // Verify steps instructions
   int maneuver_index = 1;
   gurka::assert::raw::expect_instructions_at_maneuver_index(result, maneuver_index,
-                                                            "Take the stairs to Parking.", "", "", "",
-                                                            "");
+                                                            "Take the stairs to Parking.", "",
+                                                            "Take the stairs to Parking.",
+                                                            "Take the stairs to Parking.",
+                                                            "Continue for 200 meters.");
 }
 
 TEST_F(Indoor, OutdoorStepsManeuver) {
@@ -194,16 +233,15 @@ TEST_F(Indoor, OutdoorStepsManeuver) {
 
   // Verify maneuver types
   gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStart,
-                                                DirectionsLeg_Maneuver_Type_kLeft,
+                                                DirectionsLeg_Maneuver_Type_kStepsEnter,
                                                 DirectionsLeg_Maneuver_Type_kContinue,
                                                 DirectionsLeg_Maneuver_Type_kDestination});
 
   // Verify steps instructions
   int maneuver_index = 1;
   gurka::assert::raw::expect_instructions_at_maneuver_index(result, maneuver_index,
-                                                            "Turn left onto DN.", "Turn left.",
-                                                            "Turn left onto DN.",
-                                                            "Turn left onto DN.",
+                                                            "Take the stairs.", "",
+                                                            "Take the stairs.", "Take the stairs.",
                                                             "Continue for 200 meters.");
 }
 
@@ -270,13 +308,225 @@ TEST_F(Indoor, CombineStepsManeuvers) {
   // Verify steps instructions
   int maneuver_index = 1;
   gurka::assert::raw::expect_instructions_at_maneuver_index(result, maneuver_index,
-                                                            "Take the stairs to Level 3.", "", "", "",
-                                                            "");
+                                                            "Take the stairs to Level 3.", "",
+                                                            "Take the stairs to Level 3.",
+                                                            "Take the stairs to Level 3.",
+                                                            "Continue for 2 kilometers.");
 }
 
+TEST_F(Indoor, StepsStartManeuver) {
+  auto result = gurka::do_action(valhalla::Options::route, map, {"B", "C"}, "pedestrian",
+                                 {{"/locations/0/search_filter/level", "0"},
+                                  {"/locations/1/search_filter/level", "1"}});
+  gurka::assert::raw::expect_path(result, {"BC"});
+
+  // Verify maneuver types
+  gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStepsEnter,
+                                                DirectionsLeg_Maneuver_Type_kDestination});
+}
+
+// Dont combine maneuvers if there is a level change
+TEST_F(Indoor, OutdoorStepsLevelChange) {
+  auto result = gurka::do_action(valhalla::Options::route, map, {"J", "U"}, "pedestrian", {});
+  gurka::assert::raw::expect_path(result, {"JS", "ST", "TU"});
+
+  // Verify maneuver types
+  gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStart,
+                                                DirectionsLeg_Maneuver_Type_kStepsEnter,
+                                                DirectionsLeg_Maneuver_Type_kContinue,
+                                                DirectionsLeg_Maneuver_Type_kDestination});
+
+  // Verify steps instructions
+  int maneuver_index = 1;
+  gurka::assert::raw::expect_instructions_at_maneuver_index(result, maneuver_index,
+                                                            "Take the stairs to Level 4.", "",
+                                                            "Take the stairs to Level 4.",
+                                                            "Take the stairs to Level 4.",
+                                                            "Continue for 300 meters.");
+}
+TEST_F(Indoor, StepsLevelChanges) {
+  // get a route via steps and check the level changelog
+  std::string route_json;
+  auto result =
+      gurka::do_action(valhalla::Options::route, map, {"A", "J"}, "pedestrian",
+                       {{"/costing_options/pedestrian/elevator_penalty", "3600"}}, {}, &route_json);
+  gurka::assert::raw::expect_path(result, {"AB", "BC", "Cx", "xy", "yJ"});
+  rapidjson::Document doc;
+  doc.Parse(route_json.c_str());
+
+  check_level_changes(doc, {{0, 0.f}, {4, 3.f}});
+}
+
+TEST_F(Indoor, EdgeElevatorLevelChanges) {
+  // get a route via an edge-modeled elevator and check the level changelog
+  std::string route_json;
+  auto result =
+      gurka::do_action(valhalla::Options::route, map, {"F", "I"}, "pedestrian", {}, {}, &route_json);
+  gurka::assert::raw::expect_path(result, {"FG", "GH", "HI"});
+  rapidjson::Document doc;
+  doc.Parse(route_json.c_str());
+
+  check_level_changes(doc, {{0, 1.f}, {2, 2.f}});
+}
+
+TEST_F(Indoor, NodeElevatorLevelChanges) {
+  // get a route via a node-modeled elevator and check the level changelog
+  std::string route_json;
+  auto result =
+      gurka::do_action(valhalla::Options::route, map, {"H", "J"}, "pedestrian", {}, {}, &route_json);
+  gurka::assert::raw::expect_path(result, {"HI", "IJ"});
+  rapidjson::Document doc;
+  doc.Parse(route_json.c_str());
+
+  check_level_changes(doc, {{0, 2.f}, {1, 3.f}});
+}
+
+TEST_F(Indoor, NodeElevatorPenalty) {
+  // get a route via a node-modeled elevator and check the level changelog
+  std::string route_json;
+  auto result1 =
+      gurka::do_action(valhalla::Options::route, map, {"H", "J"}, "pedestrian", {}, {}, &route_json);
+  gurka::assert::raw::expect_path(result1, {"HI", "IJ"});
+
+  auto result2 =
+      gurka::do_action(valhalla::Options::route, map, {"H", "Q"}, "pedestrian", {}, {}, &route_json);
+  gurka::assert::raw::expect_path(result2, {"HP", "PQ"});
+
+  // compare cost
+  const auto& nodes1 = result1.trip().routes(0).legs(0).node();
+  const auto& nodes2 = result2.trip().routes(0).legs(0).node();
+  EXPECT_LT(nodes1.at(nodes1.size() - 1).cost().elapsed_cost().cost(),
+            nodes2.at(nodes2.size() - 1).cost().elapsed_cost().cost());
+}
+
+TEST_F(Indoor, MultiLevelStartEnd) {
+  std::string res;
+  rapidjson::Document doc;
+  auto result = gurka::do_action(valhalla::Options::route, map, {"S", "U"}, "pedestrian",
+                                 {{"/locations/0/search_filter/level", "3"},
+                                  {"/locations/1/search_filter/level", "4"}},
+                                 {}, &res);
+  doc.Parse(res.c_str());
+  gurka::assert::raw::expect_path(result, {"ST", "TU"});
+  check_level_changes(doc, {{0, 3.f}, {1, 4.f}});
+}
+
+TEST_F(Indoor, TrivialMultiLevel) {
+  std::string res;
+  rapidjson::Document doc;
+  auto result = gurka::do_action(valhalla::Options::route, map, {"S", "T"}, "pedestrian",
+                                 {{"/locations/0/search_filter/level", "3"},
+                                  {"/locations/1/search_filter/level", "4"}},
+                                 {}, &res);
+  doc.Parse(res.c_str());
+  gurka::assert::raw::expect_path(result, {"ST"});
+  check_level_changes(doc, {{0, 3.f}, {1, 4.f}});
+}
+
+TEST(StandAlone, ElevatorMultiCueInstructions) {
+  constexpr double gridsize_metres = 1;
+
+  const std::string ascii_map = R"(
+             E
+             |
+             |
+      A---B--C---D
+             |
+             |
+             F
+    )";
+
+  const gurka::ways ways = {
+      {"AB", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "0"}}},
+      {"BC", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+      {"CD", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+      {"CE", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+      {"CF", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+  };
+
+  const gurka::nodes nodes = {
+      {"B", {{"highway", "elevator"}, {"indoor", "yes"}}},
+  };
+
+  const auto layout =
+      gurka::detail::map_to_coordinates(ascii_map, gridsize_metres, {5.1079374, 52.0887174});
+  auto map =
+      gurka::buildtiles(layout, ways, nodes, {}, "test/data/gurka_access_psv_way", build_config);
+
+  auto result = gurka::do_action(valhalla::Options::route, map, {"A", "F"}, "pedestrian",
+                                 {
+                                     {"/locations/0/node_snap_tolerance", "0"},
+                                     {"/locations/1/node_snap_tolerance", "0"},
+                                     {"/locations/0/radius", "1"},
+                                     {"/locations/1/radius", "1"},
+                                 });
+  gurka::assert::raw::expect_path(result, {"AB", "BC", "CF"});
+
+  // Verify maneuver types
+  gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStart,
+                                                DirectionsLeg_Maneuver_Type_kElevatorEnter,
+                                                DirectionsLeg_Maneuver_Type_kRight,
+                                                DirectionsLeg_Maneuver_Type_kDestination});
+
+  // Verify steps instructions
+  int maneuver_index = 1;
+  gurka::assert::raw::
+      expect_instructions_at_maneuver_index(result, maneuver_index, "Take the elevator to Level 3.",
+                                            "", "Take the elevator to Level 3.",
+                                            "Take the elevator to Level 3. Then Turn right onto CF.",
+                                            "Continue for less than 10 meters.");
+}
+
+TEST(Standalone, MultiEdgeSteps) {
+  constexpr double gridsize_metres = 1;
+
+  const std::string ascii_map = R"(
+              E
+              |
+      z---A---B--C---D---x
+                 |
+                 F
+    )";
+
+  const gurka::ways ways = {
+      {"zA", {{"highway", "footway"}, {"level", "0"}}},
+      {"ABCD", {{"highway", "steps"}, {"level", "1;2;3;4"}}},
+      {"BE", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "2"}}},
+      {"CF", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "3"}}},
+      {"Dx", {{"highway", "footway"}, {"level", "4"}}},
+  };
+
+  const auto layout =
+      gurka::detail::map_to_coordinates(ascii_map, gridsize_metres, {5.1079374, 52.0887174});
+  auto map =
+      gurka::buildtiles(layout, ways, {}, {}, "test/data/gurka_multi_edge_steps", build_config);
+
+  auto result = gurka::do_action(valhalla::Options::route, map, {"z", "x"}, "pedestrian",
+                                 {
+                                     {"/locations/0/node_snap_tolerance", "0"},
+                                     {"/locations/1/node_snap_tolerance", "0"},
+                                     {"/locations/0/radius", "1"},
+                                     {"/locations/1/radius", "1"},
+                                 });
+  gurka::assert::raw::expect_path(result, {"zA", "ABCD", "ABCD", "ABCD", "Dx"});
+
+  // Verify maneuver types
+  gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStart,
+                                                DirectionsLeg_Maneuver_Type_kStepsEnter,
+                                                DirectionsLeg_Maneuver_Type_kContinue,
+                                                DirectionsLeg_Maneuver_Type_kDestination});
+
+  // Verify steps instructions
+  int maneuver_index = 1;
+  gurka::assert::raw::
+      expect_instructions_at_maneuver_index(result, maneuver_index, "Take the stairs to Level 4.", "",
+                                            "Take the stairs to Level 4.",
+                                            "Take the stairs to Level 4. Then Continue on Dx.",
+                                            "Continue for less than 10 meters.");
+}
 /****************************************************************************************/
 
-class Levels : public ::testing::Test {
+class TestLevels : public ::testing::Test {
 protected:
   static gurka::map map;
   static std::string ascii_map;
@@ -306,12 +556,11 @@ protected:
   }
 };
 
-gurka::map Levels::map = {};
-std::string Levels::ascii_map = {};
-gurka::nodelayout Levels::layout = {};
+gurka::map TestLevels::map = {};
+std::string TestLevels::ascii_map = {};
+gurka::nodelayout TestLevels::layout = {};
 
-TEST_F(Levels, EdgeInfoIncludes) {
-
+TEST_F(TestLevels, EdgeInfoIncludes) {
   baldr::GraphReader graphreader(map.config.get_child("mjolnir"));
 
   std::vector<std::pair<std::array<std::string, 2>, std::vector<float>>> values = {
@@ -337,8 +586,7 @@ TEST_F(Levels, EdgeInfoIncludes) {
   }
 }
 
-TEST_F(Levels, EdgeInfoJson) {
-
+TEST_F(TestLevels, EdgeInfoJson) {
   auto graphreader = test::make_clean_graphreader(map.config.get_child("mjolnir"));
   std::string json;
   std::vector<std::string> locs = {
@@ -352,7 +600,7 @@ TEST_F(Levels, EdgeInfoJson) {
       "s", // HI
       "r", // IJ
   };
-  auto result =
+  [[maybe_unused]] auto result =
       gurka::do_action(valhalla::Options::locate, map, locs, "pedestrian", {}, graphreader, &json);
 
   std::unordered_map<std::string, std::vector<range_t>> expected_levels_map = {
@@ -375,7 +623,7 @@ TEST_F(Levels, EdgeInfoJson) {
   ASSERT_EQ(response.GetArray().Size(), 9);
 
   for (size_t i = 0; i < locs.size(); ++i) {
-    auto name = locs[i];
+    const auto& name = locs[i];
     auto edges = rapidjson::Pointer("/" + std::to_string(i) + "/edges").Get(response)->GetArray();
     ASSERT_EQ(edges.Size(), 2);
     auto expected_levels = expected_levels_map[name];
@@ -408,4 +656,47 @@ TEST_F(Levels, EdgeInfoJson) {
       }
     }
   }
+}
+
+TEST(StandAlone, GenericLevelChange) {
+  //
+  constexpr double gridsize_metres = 1;
+
+  const std::string ascii_map = R"(
+      A---B---C---D
+    )";
+
+  const gurka::ways ways = {
+      {"AB", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "0"}}},
+      {"BC", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "0;1"}}},
+      {"CD", {{"highway", "corridor"}, {"indoor", "yes"}, {"level", "1"}}},
+  };
+
+  // const gurka::nodes nodes = {
+  //     {"B", {{"highway", "elevator"}, {"indoor", "yes"}}},
+  // };
+
+  const auto layout =
+      gurka::detail::map_to_coordinates(ascii_map, gridsize_metres, {5.1079374, 52.0887174});
+  auto map = gurka::buildtiles(layout, ways, {}, {}, "test/data/gurka_access_psv_way", build_config);
+
+  auto result = gurka::do_action(valhalla::Options::route, map, {"A", "D"}, "pedestrian",
+                                 {
+                                     {"/locations/0/node_snap_tolerance", "0"},
+                                     {"/locations/1/node_snap_tolerance", "0"},
+                                     {"/locations/0/radius", "1"},
+                                     {"/locations/1/radius", "1"},
+                                 });
+  gurka::assert::raw::expect_path(result, {"AB", "BC", "CD"});
+
+  // Verify maneuver types
+  gurka::assert::raw::expect_maneuvers(result, {DirectionsLeg_Maneuver_Type_kStart,
+                                                DirectionsLeg_Maneuver_Type_kLevelChange,
+                                                DirectionsLeg_Maneuver_Type_kContinue,
+                                                DirectionsLeg_Maneuver_Type_kDestination});
+
+  // Verify single maneuver prior to elevator
+  // int maneuver_index = 0;
+  gurka::assert::raw::expect_instructions_at_maneuver_index(result, 1, "Continue to Level 1.", "", "",
+                                                            "", "");
 }
