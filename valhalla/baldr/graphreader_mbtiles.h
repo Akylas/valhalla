@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "baldr/graphreader.h"
-#include "filesystem.h"
 #include "midgard/encoded.h"
 #include "midgard/logging.h"
 

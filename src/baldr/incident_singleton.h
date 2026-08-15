@@ -332,12 +332,6 @@ protected:
     } while (!interrupt || !interrupt(run_count));
 
     LOG_INFO("Incident watcher has stopped");
-#else
-    if (state) {
-      state->initialized.store(true);
-      state->signal.notify_one();
-      return;
-    }
   }
 
 public:

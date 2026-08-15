@@ -487,6 +487,7 @@ GraphReader::GraphReader(const std::vector<std::shared_ptr<sqlite3pp::database>>
     : mbtiles_db_(std::make_shared<mbtiles_db_t>(dbs)),
       tile_url_(""),
       max_concurrent_users_(1),
+      is_tar_url_(false),
       cache_(TileCacheFactory::createTileCache(boost::property_tree::ptree{})) {
 }
 
